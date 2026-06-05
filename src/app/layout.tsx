@@ -1,13 +1,7 @@
 import '@/styles/globals.css';
 import type { Metadata } from 'next';
-import { Inter, JetBrains_Mono, Space_Grotesk } from 'next/font/google';
+import { Inter, JetBrains_Mono } from 'next/font/google';
 import type { ReactNode } from 'react';
-
-const spaceGrotesk = Space_Grotesk({
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-headline',
-});
 
 const inter = Inter({
   subsets: ['latin'],
@@ -32,10 +26,7 @@ export default function RootLayout({
   children: ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${spaceGrotesk.variable} ${inter.variable} ${jetBrainsMono.variable}`}
-    >
+    <html lang="en" className={`${inter.variable} ${jetBrainsMono.variable}`}>
       <body className="font-body text-foreground antialiased">{children}</body>
     </html>
   );

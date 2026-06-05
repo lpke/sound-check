@@ -11,9 +11,7 @@ export function Panel({
 }) {
   return (
     <section className="border-line bg-panel rounded-lg border p-4 shadow-sm sm:p-5">
-      <h2 className="font-headline text-foreground text-lg font-semibold">
-        {title}
-      </h2>
+      <h2 className="text-foreground text-lg font-semibold">{title}</h2>
       <div className="mt-4">{children}</div>
     </section>
   );
@@ -45,7 +43,12 @@ export function Button({
   children: ReactNode;
   disabled?: boolean;
   onClick: () => void;
-  variant?: 'primary' | 'secondary' | 'danger';
+  variant?:
+    | 'danger'
+    | 'outputPrimary'
+    | 'outputSecondary'
+    | 'primary'
+    | 'secondary';
 }) {
   return (
     <button
@@ -58,6 +61,10 @@ export function Button({
           'border-control bg-control text-on-control hover:bg-control-hover focus:ring-control-soft',
         variant === 'secondary' &&
           'border-line bg-panel-soft text-foreground hover:bg-panel-strong focus:ring-control-soft',
+        variant === 'outputPrimary' &&
+          'border-output bg-output text-on-control hover:bg-output/90 focus:ring-output-soft',
+        variant === 'outputSecondary' &&
+          'border-output/25 bg-output-soft text-output hover:border-output/35 hover:bg-output-soft/70 focus:ring-output-soft',
         variant === 'danger' &&
           'border-danger bg-danger hover:bg-danger/90 focus:ring-danger-soft text-white',
       )}
@@ -139,19 +146,26 @@ export function LevelMeter({
   level: number;
 }) {
   const boundedLevel = clamp(level, 0, 1);
+  const meterColor =
+    accent === 'output'
+      ? 'var(--color-output)'
+      : accent === 'control'
+        ? 'var(--color-control)'
+        : 'var(--color-input)';
 
   return (
     <div
-      className={joinClasses('bg-panel-strong h-2 overflow-hidden', className)}
+      className={joinClasses(
+        'bg-panel-strong relative h-2 overflow-hidden',
+        className,
+      )}
     >
       <span
-        className={joinClasses(
-          'block h-full origin-left transition-transform duration-75',
-          accent === 'control' && 'bg-control',
-          accent === 'input' && 'bg-input',
-          accent === 'output' && 'bg-output',
-        )}
-        style={{ transform: `scaleX(${boundedLevel})` }}
+        className="absolute inset-0 block h-full"
+        style={{
+          background: `linear-gradient(90deg, ${meterColor} 0%, ${meterColor} 72%, var(--color-warning) 88%, var(--color-danger) 100%)`,
+          clipPath: `inset(0 ${100 - boundedLevel * 100}% 0 0)`,
+        }}
       />
     </div>
   );

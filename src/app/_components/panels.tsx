@@ -1,5 +1,6 @@
 import {
   useRef,
+  useState,
   type ChangeEvent,
   type ComponentType,
   type ReactNode,
@@ -33,53 +34,25 @@ const speakerTestOptions: { kind: SpeakerTestKind; label: string }[] = [
 
 export function SiteHeader({ soundCheck }: SoundCheckProps) {
   return (
-    <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-      <div className="flex flex-wrap items-center gap-2">
-        <SiteStatus
-          label="App"
-          value={soundCheck.appPaused ? 'Paused' : 'Running'}
-          tone={soundCheck.appPaused ? 'warn' : 'good'}
-        />
-        <SiteStatus
-          label="Mic"
-          value={getMicHeaderStatus(soundCheck)}
-          tone={getMicHeaderTone(soundCheck)}
-        />
-        <SiteStatus
-          label="Speaker"
-          value={getSpeakerHeaderStatus(soundCheck)}
-          tone={getSpeakerHeaderTone(soundCheck)}
-        />
-        <SiteStatus
-          label="Last event"
-          value={soundCheck.errorMessage || soundCheck.statusMessage}
-          tone={soundCheck.errorMessage ? 'danger' : 'idle'}
-          wide
-        />
-      </div>
-
-      <div className="flex shrink-0 items-center gap-2">
-        <DebugModal soundCheck={soundCheck} />
-        <button
-          type="button"
-          onClick={
-            soundCheck.appPaused ? soundCheck.resumeApp : soundCheck.pauseApp
-          }
-          className={joinClasses(
-            'inline-flex h-10 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-semibold transition focus:ring-4 focus:outline-none',
-            soundCheck.appPaused
-              ? 'border-control bg-control text-on-control hover:bg-control-hover focus:ring-control-soft'
-              : 'border-danger/30 bg-danger-soft text-danger hover:border-danger/45 hover:bg-danger-soft/80 focus:ring-danger-soft',
-          )}
-        >
-          {soundCheck.appPaused ? (
-            <PlayIcon aria-hidden="true" className="h-4 w-4" />
-          ) : (
-            <PauseIcon aria-hidden="true" className="h-4 w-4" />
-          )}
-          {soundCheck.appPaused ? 'Resume all' : 'Pause all'}
-        </button>
-      </div>
+    <header className="flex justify-end gap-2">
+      <DebugModal soundCheck={soundCheck} />
+      <button
+        type="button"
+        onClick={soundCheck.toggleAllAudio}
+        className={joinClasses(
+          'inline-flex h-10 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-semibold transition focus:ring-4 focus:outline-none',
+          soundCheck.allAudioStopped
+            ? 'border-control bg-control text-on-control hover:bg-control-hover focus:ring-control-soft'
+            : 'border-line bg-panel text-foreground hover:bg-panel-soft focus:ring-control-soft',
+        )}
+      >
+        {soundCheck.allAudioStopped ? (
+          <PlayIcon aria-hidden="true" className="h-4 w-4" />
+        ) : (
+          <PauseIcon aria-hidden="true" className="h-4 w-4" />
+        )}
+        {soundCheck.allAudioStopped ? 'Resume all' : 'Pause all'}
+      </button>
     </header>
   );
 }
@@ -96,15 +69,17 @@ export function UnsupportedPanel() {
 }
 
 export function InputSection({ soundCheck }: SoundCheckProps) {
+  const isInputStopped = soundCheck.appPaused || soundCheck.inputMuted;
+
   return (
-    <SectionShell muted={soundCheck.inputMuted}>
+    <SectionShell muted={isInputStopped}>
       <SectionHeader
         accent="input"
         devices={soundCheck.inputDevices}
         deviceKind="audioinput"
         emptyLabel="No microphone detected"
         icon={MicrophoneIcon}
-        muted={soundCheck.inputMuted}
+        muted={isInputStopped}
         onDeviceChange={soundCheck.handleInputChange}
         onRefresh={soundCheck.refreshDevices}
         onToggleMute={soundCheck.toggleInputMute}
@@ -112,9 +87,7 @@ export function InputSection({ soundCheck }: SoundCheckProps) {
         selectedDeviceName={soundCheck.selectedInputName}
         selectLabel="Microphone device"
         signalState={soundCheck.inputSignalState}
-        toggleLabel={
-          soundCheck.inputMuted ? 'Unmute microphone' : 'Mute microphone'
-        }
+        toggleLabel={isInputStopped ? 'Unmute microphone' : 'Mute microphone'}
       />
       <LevelMeter accent="input" level={soundCheck.inputLevel} />
 
@@ -129,6 +102,7 @@ export function InputSection({ soundCheck }: SoundCheckProps) {
 
 export function OutputSection({ soundCheck }: SoundCheckProps) {
   const musicFileInputRef = useRef<HTMLInputElement | null>(null);
+  const isOutputStopped = soundCheck.appPaused || soundCheck.outputMuted;
   const testKind = soundCheck.speakerTestSettings.kind;
   const needsFrequency = usesToneFrequency(testKind);
   const needsFile = testKind === 'fileMusic';
@@ -147,7 +121,7 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
   }
 
   return (
-    <SectionShell muted={soundCheck.outputMuted}>
+    <SectionShell muted={isOutputStopped}>
       <SectionHeader
         accent="output"
         devices={soundCheck.outputDevices}
@@ -155,7 +129,7 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
         disabled={!soundCheck.canRouteOutput}
         emptyLabel="No speaker detected"
         icon={SpeakerIcon}
-        muted={soundCheck.outputMuted}
+        muted={isOutputStopped}
         onDeviceChange={soundCheck.handleOutputChange}
         onRefresh={soundCheck.refreshDevices}
         onToggleMute={soundCheck.toggleOutputMute}
@@ -163,7 +137,7 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
         selectedDeviceName={soundCheck.selectedOutputName}
         selectLabel="Speaker device"
         signalState={soundCheck.outputSignalState}
-        toggleLabel={soundCheck.outputMuted ? 'Unmute speaker' : 'Mute speaker'}
+        toggleLabel={isOutputStopped ? 'Unmute speaker' : 'Mute speaker'}
       />
       <LevelMeter accent="output" level={soundCheck.outputLevel} />
 
@@ -174,7 +148,7 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
             description="Ask the browser for additional speaker choices when it supports explicit output selection."
           >
             <Button
-              variant="secondary"
+              variant="outputSecondary"
               onClick={soundCheck.requestOutputAccess}
             >
               Choose speaker
@@ -265,7 +239,7 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
                     'No file selected'}
                 </p>
                 <Button
-                  variant="secondary"
+                  variant="outputSecondary"
                   onClick={() => musicFileInputRef.current?.click()}
                 >
                   Choose file
@@ -275,6 +249,7 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
 
             <div className="flex flex-wrap gap-2">
               <Button
+                variant="outputPrimary"
                 onClick={soundCheck.startSpeakerTest}
                 disabled={
                   soundCheck.appPaused ||
@@ -287,7 +262,7 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
               </Button>
               {isSpeakerTestActive && !soundCheck.appPaused ? (
                 <Button
-                  variant="secondary"
+                  variant="outputSecondary"
                   onClick={soundCheck.stopOutputGraph}
                 >
                   Stop
@@ -384,7 +359,7 @@ function SectionHeader({
       <label className="focus-within:ring-control-soft relative inline-flex max-w-full min-w-44 items-center justify-self-start rounded-md py-1 pr-7 text-left transition focus-within:ring-4">
         <span className="sr-only">{selectLabel}</span>
         <span
-          className="font-headline text-foreground min-w-0 truncate text-lg leading-tight font-semibold sm:text-xl"
+          className="text-foreground min-w-0 truncate text-lg leading-tight font-semibold sm:text-xl"
           title={visibleDeviceName}
         >
           {visibleDeviceName}
@@ -418,50 +393,13 @@ function SectionHeader({
         </select>
       </label>
 
-      <IconButton
+      <RefreshButton
         label="Refresh devices"
         onClick={onRefresh}
         icon={RefreshIcon}
       />
       <SignalDot state={signalState} />
     </div>
-  );
-}
-
-function SiteStatus({
-  label,
-  tone,
-  value,
-  wide,
-}: {
-  label: string;
-  tone: 'danger' | 'good' | 'idle' | 'warn';
-  value: string;
-  wide?: boolean;
-}) {
-  return (
-    <span
-      className={joinClasses(
-        'inline-flex h-10 min-w-0 items-center gap-2 rounded-lg border px-3 text-xs',
-        wide ? 'max-w-full sm:max-w-md' : 'max-w-48',
-        tone === 'good' && 'border-signal/30 bg-signal-soft text-signal',
-        tone === 'warn' && 'border-warning/30 bg-warning-soft text-warning',
-        tone === 'danger' && 'border-danger/30 bg-danger-soft text-danger',
-        tone === 'idle' && 'border-line bg-panel text-muted',
-      )}
-    >
-      <span
-        className={joinClasses(
-          'h-2 w-2 shrink-0 rounded-full',
-          tone === 'good' && 'bg-signal',
-          tone === 'warn' && 'bg-warning',
-          tone === 'danger' && 'bg-danger',
-          tone === 'idle' && 'bg-status-ready',
-        )}
-      />
-      <span className="shrink-0 font-semibold">{label}</span>
-      <span className="min-w-0 truncate">{value}</span>
-    </span>
   );
 }
 
@@ -679,7 +617,7 @@ function RecordingPlayback({ soundCheck }: SoundCheckProps) {
     >
       <div className="flex flex-wrap gap-2">
         <Button
-          variant="secondary"
+          variant="outputSecondary"
           onClick={soundCheck.playRecordedClip}
           disabled={
             soundCheck.appPaused ||
@@ -691,7 +629,10 @@ function RecordingPlayback({ soundCheck }: SoundCheckProps) {
           Play recording
         </Button>
         {soundCheck.routedMode === 'clip' ? (
-          <Button variant="secondary" onClick={soundCheck.stopOutputGraph}>
+          <Button
+            variant="outputSecondary"
+            onClick={soundCheck.stopOutputGraph}
+          >
             Stop
           </Button>
         ) : null}
@@ -722,88 +663,45 @@ function SettingsGroup({
   );
 }
 
-function IconButton({
+function RefreshButton({
   icon: Icon,
   label,
   onClick,
 }: {
   icon: IconComponent;
   label: string;
-  onClick: () => void;
+  onClick: () => Promise<void> | void;
 }) {
+  const [isSpinning, setIsSpinning] = useState(false);
+
+  async function handleClick() {
+    setIsSpinning(true);
+
+    try {
+      await onClick();
+    } finally {
+      window.setTimeout(() => setIsSpinning(false), 500);
+    }
+  }
+
   return (
     <button
       type="button"
       aria-label={label}
       title={label}
-      onClick={onClick}
-      className="border-line bg-panel/80 text-muted hover:bg-panel hover:text-foreground focus:ring-control-soft flex h-9 w-9 items-center justify-center rounded-lg border transition focus:ring-4 focus:outline-none"
+      onClick={handleClick}
+      className="text-muted hover:bg-panel/80 hover:text-foreground focus:ring-control-soft flex h-9 w-9 items-center justify-center rounded-lg bg-transparent transition focus:ring-4 focus:outline-none"
     >
-      <Icon aria-hidden="true" className="h-4 w-4" />
+      <Icon
+        aria-hidden="true"
+        className={joinClasses('h-4 w-4', isSpinning && 'animate-spin')}
+      />
     </button>
   );
 }
 
 function usesToneFrequency(kind: SpeakerTestKind) {
   return kind === 'tone' || kind === 'modulatedTone' || kind === 'sweep';
-}
-
-function getMicHeaderStatus(soundCheck: SoundCheckController) {
-  if (soundCheck.appPaused) {
-    return 'Paused';
-  }
-
-  if (soundCheck.inputMuted) {
-    return 'Muted';
-  }
-
-  if (soundCheck.permissionState === 'blocked') {
-    return 'Blocked';
-  }
-
-  if (soundCheck.permissionState === 'granted') {
-    return soundCheck.inputSignalState === 'active' ? 'Signal' : 'Ready';
-  }
-
-  return 'Starting';
-}
-
-function getMicHeaderTone(soundCheck: SoundCheckController) {
-  if (soundCheck.inputMuted || soundCheck.appPaused) {
-    return 'warn' as const;
-  }
-
-  if (soundCheck.permissionState === 'blocked') {
-    return 'danger' as const;
-  }
-
-  return soundCheck.permissionState === 'granted'
-    ? ('good' as const)
-    : ('idle' as const);
-}
-
-function getSpeakerHeaderStatus(soundCheck: SoundCheckController) {
-  if (soundCheck.appPaused) {
-    return 'Paused';
-  }
-
-  if (soundCheck.outputMuted) {
-    return 'Muted';
-  }
-
-  if (soundCheck.routedMode !== 'idle') {
-    return 'Playing';
-  }
-
-  return soundCheck.canRouteOutput ? 'Ready' : 'Default only';
-}
-
-function getSpeakerHeaderTone(soundCheck: SoundCheckController) {
-  if (soundCheck.outputMuted || soundCheck.appPaused) {
-    return 'warn' as const;
-  }
-
-  return soundCheck.canRouteOutput ? ('good' as const) : ('idle' as const);
 }
 
 function MicrophoneIcon(props: SVGProps<SVGSVGElement>) {

@@ -65,6 +65,7 @@ export function DebugModal({ soundCheck }: DebugModalProps) {
   const [copyState, setCopyState] = useState<'copied' | 'idle' | 'failed'>(
     'idle',
   );
+  const [editedDebugText, setEditedDebugText] = useState<string | null>(null);
 
   const debugText = useMemo(() => {
     const payload: Record<string, unknown> = {
@@ -74,6 +75,7 @@ export function DebugModal({ soundCheck }: DebugModalProps) {
 
     if (includedSections.app) {
       payload.app = {
+        allAudioStopped: soundCheck.allAudioStopped,
         appPaused: soundCheck.appPaused,
         inputMuted: soundCheck.inputMuted,
         inputSignalState: soundCheck.inputSignalState,
@@ -172,10 +174,11 @@ export function DebugModal({ soundCheck }: DebugModalProps) {
 
     return JSON.stringify(payload, null, 2);
   }, [includedSections, runtimeInfo, soundCheck]);
+  const displayedDebugText = editedDebugText ?? debugText;
 
   async function copyDebugText() {
     try {
-      await navigator.clipboard.writeText(debugText);
+      await navigator.clipboard.writeText(displayedDebugText);
       setCopyState('copied');
       window.setTimeout(() => setCopyState('idle'), 1600);
     } catch {
@@ -205,12 +208,15 @@ export function DebugModal({ soundCheck }: DebugModalProps) {
               <input
                 type="checkbox"
                 checked={includedSections[section.key]}
-                onChange={(event) =>
+                onChange={(event) => {
+                  const checked = event.target.checked;
+
+                  setEditedDebugText(null);
                   setIncludedSections((currentSections) => ({
                     ...currentSections,
-                    [section.key]: event.target.checked,
-                  }))
-                }
+                    [section.key]: checked,
+                  }));
+                }}
                 className="accent-control h-4 w-4"
               />
               <span className="text-foreground font-semibold">
@@ -220,11 +226,7 @@ export function DebugModal({ soundCheck }: DebugModalProps) {
           ))}
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-muted text-xs">
-            Includes selected device IDs, device labels, routing support,
-            current levels, test settings, and browser audio capabilities.
-          </p>
+        <div className="flex justify-end">
           <button
             type="button"
             onClick={copyDebugText}
@@ -245,9 +247,13 @@ export function DebugModal({ soundCheck }: DebugModalProps) {
           </button>
         </div>
 
-        <pre className="border-line bg-panel-soft text-foreground max-h-[48svh] overflow-auto rounded-lg border p-4 font-mono text-xs leading-5 whitespace-pre-wrap">
-          {debugText}
-        </pre>
+        <textarea
+          aria-label="Editable debug information JSON"
+          value={displayedDebugText}
+          onChange={(event) => setEditedDebugText(event.target.value)}
+          spellCheck={false}
+          className="border-line bg-panel-soft text-foreground focus:border-control focus:ring-control-soft min-h-[48svh] resize-y rounded-lg border p-4 font-mono text-xs leading-5 outline-none focus:ring-4"
+        />
       </div>
     </Modal>
   );

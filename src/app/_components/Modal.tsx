@@ -241,6 +241,14 @@ export function Modal({
               onPointerUp={(event) => event.stopPropagation()}
             >
               <style>{`
+                @keyframes modalOverlayIn {
+                  from { opacity: 0; backdrop-filter: blur(0); }
+                  to { opacity: 1; backdrop-filter: blur(4px); }
+                }
+                @keyframes modalOverlayOut {
+                  from { opacity: 1; backdrop-filter: blur(4px); }
+                  to { opacity: 0; backdrop-filter: blur(0); }
+                }
                 @keyframes modalSheetIn {
                   from { opacity: 0; transform: translateY(100%); }
                   to { opacity: 1; transform: translateY(0); }
@@ -277,8 +285,12 @@ export function Modal({
               <button
                 type="button"
                 tabIndex={-1}
-                className="absolute inset-0 cursor-default bg-black/45 backdrop-blur-sm transition-opacity duration-200"
-                style={{ opacity: isClosing ? 0 : 1 }}
+                className={joinClasses(
+                  'absolute inset-0 cursor-default bg-black/45',
+                  isClosing
+                    ? 'animate-[modalOverlayOut_180ms_ease-in_both]'
+                    : 'animate-[modalOverlayIn_200ms_ease-out_both]',
+                )}
                 aria-label="Close modal"
                 onClick={(event) => {
                   event.stopPropagation();
@@ -299,7 +311,7 @@ export function Modal({
                 )}
               >
                 <div className="border-line flex min-w-0 items-center justify-between gap-4 border-b px-5 py-4">
-                  <h2 className="font-headline text-foreground min-w-0 flex-1 text-xl leading-tight font-semibold">
+                  <h2 className="text-foreground min-w-0 flex-1 text-xl leading-tight font-semibold">
                     {title}
                   </h2>
                   <button

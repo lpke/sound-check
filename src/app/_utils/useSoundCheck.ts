@@ -147,6 +147,7 @@ export function useSoundCheck() {
       : outputLevel >= SIGNAL_THRESHOLD
         ? 'active'
         : 'ready';
+  const allAudioStopped = appPaused || (inputMuted && outputMuted);
 
   const stopInputAnalyser = useCallback(() => {
     const activeAnalyser = inputAnalyserRef.current;
@@ -490,14 +491,27 @@ export function useSoundCheck() {
     setMonitorEnabled(false);
     stopOutputGraph();
     stopInputStream();
+    setInputMuted(true);
+    setOutputMuted(true);
     setAppPaused(true);
     setStatusMessage('App paused. Input and output are stopped.');
   }, [stopInputStream, stopOutputGraph, stopRecording]);
 
   const resumeApp = useCallback(() => {
+    setInputMuted(false);
+    setOutputMuted(false);
     setAppPaused(false);
-    setStatusMessage('App resumed. Start a test when ready.');
+    setStatusMessage('App resumed. Input and output are unmuted.');
   }, []);
+
+  const toggleAllAudio = useCallback(() => {
+    if (allAudioStopped) {
+      resumeApp();
+      return;
+    }
+
+    pauseApp();
+  }, [allAudioStopped, pauseApp, resumeApp]);
 
   const playRecordedClip = useCallback(async () => {
     if (appPaused || outputMuted) {
@@ -763,6 +777,7 @@ export function useSoundCheck() {
     selectedInputName,
     selectedOutputName,
     appPaused,
+    allAudioStopped,
     inputMuted,
     inputSignalState,
     outputMuted,
@@ -784,6 +799,7 @@ export function useSoundCheck() {
     errorMessage,
     pauseApp,
     resumeApp,
+    toggleAllAudio,
     toggleInputMute,
     toggleOutputMute,
     refreshDevices,
