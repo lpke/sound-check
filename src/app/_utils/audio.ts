@@ -18,6 +18,15 @@ const OUTPUT_PIPELINE_WARMUP_MS = 240;
 const SOURCE_START_DELAY_SECONDS = 0.03;
 const METER_FLOOR_DB = -48;
 const METER_PEAK_HINT_GAIN = 0.72;
+const INPUT_METER_OPTIONS = {
+  lowEndKnee: 0.55,
+  lowEndPower: 1.8,
+};
+
+type MeterOptions = {
+  lowEndKnee?: number;
+  lowEndPower?: number;
+};
 
 export function createAudioContext() {
   const AudioContextConstructor =
@@ -45,7 +54,11 @@ export async function createInputAnalyser(
 
   await context.resume();
 
-  const cancelLoop = startLevelLoop(analyser, setInputLevel);
+  const cancelLoop = startLevelLoop(
+    analyser,
+    setInputLevel,
+    INPUT_METER_OPTIONS,
+  );
 
   return {
     context,
@@ -411,14 +424,18 @@ async function warmOutputPipeline() {
   });
 }
 
-export function startLevelLoop(analyser: AnalyserNode, setLevel: LevelSetter) {
+export function startLevelLoop(
+  analyser: AnalyserNode,
+  setLevel: LevelSetter,
+  meterOptions: MeterOptions = {},
+) {
   const buffer = new Uint8Array(analyser.fftSize);
   let frame = 0;
   let lastUpdateAt = 0;
 
   const tick = () => {
     analyser.getByteTimeDomainData(buffer);
-    const nextLevel = getSignalLevel(buffer);
+    const nextLevel = getSignalLevel(buffer, meterOptions);
     const now = performance.now();
 
     if (now - lastUpdateAt >= 32) {
@@ -449,7 +466,7 @@ export function getPreferredMimeType() {
   );
 }
 
-function getSignalLevel(buffer: Uint8Array) {
+function getSignalLevel(buffer: Uint8Array, meterOptions: MeterOptions) {
   let sumSquares = 0;
   let peak = 0;
 
@@ -465,7 +482,10 @@ function getSignalLevel(buffer: Uint8Array) {
   const rmsLevel = amplitudeToMeterLevel(rms);
   const peakHintLevel = amplitudeToMeterLevel(peak) * METER_PEAK_HINT_GAIN;
 
-  return clamp(Math.max(rmsLevel, peakHintLevel), 0, 1);
+  return applyMeterCurve(
+    clamp(Math.max(rmsLevel, peakHintLevel), 0, 1),
+    meterOptions,
+  );
 }
 
 function amplitudeToMeterLevel(amplitude: number) {
@@ -476,4 +496,15 @@ function amplitudeToMeterLevel(amplitude: number) {
   const decibels = 20 * Math.log10(amplitude);
 
   return clamp((decibels - METER_FLOOR_DB) / Math.abs(METER_FLOOR_DB), 0, 1);
+}
+
+function applyMeterCurve(level: number, meterOptions: MeterOptions) {
+  const lowEndKnee = meterOptions.lowEndKnee ?? 0;
+  const lowEndPower = meterOptions.lowEndPower ?? 1;
+
+  if (lowEndKnee <= 0 || lowEndPower <= 1 || level >= lowEndKnee) {
+    return level;
+  }
+
+  return lowEndKnee * Math.pow(level / lowEndKnee, lowEndPower);
 }

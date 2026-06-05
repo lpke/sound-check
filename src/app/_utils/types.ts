@@ -2,7 +2,7 @@ import type { Dispatch, SetStateAction } from 'react';
 
 export const DEFAULT_OUTPUT_ID = 'default';
 export const MAX_MONITOR_DELAY_MS = 3000;
-export const VOICE_THRESHOLD = 0.055;
+export const VOICE_THRESHOLD = 0.18;
 export const SIGNAL_THRESHOLD = 0.003;
 export const HOT_THRESHOLD = 0.9;
 
