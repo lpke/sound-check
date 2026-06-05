@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { joinClasses } from '@/utils/utils';
 
-const EXIT_MS = 220;
+const EXIT_MS = 280;
 const MODAL_SHEET_MEDIA_QUERY = '(max-height: 760px)';
 const SCROLL_LOCK_KEYS = new Set([
   'ArrowDown',
@@ -288,8 +288,8 @@ export function Modal({
                 className={joinClasses(
                   'will-change-opacity absolute inset-0 cursor-default bg-black/45 backdrop-blur-sm',
                   isClosing
-                    ? 'animate-[modalOverlayOut_220ms_ease-in_both]'
-                    : 'animate-[modalOverlayIn_240ms_ease-out_both]',
+                    ? 'animate-[modalOverlayOut_260ms_ease-in_both]'
+                    : 'animate-[modalOverlayIn_300ms_ease-out_both]',
                 )}
                 aria-label="Close modal"
                 onClick={(event) => {
@@ -302,10 +302,10 @@ export function Modal({
                 data-modal-panel
                 data-modal-state={isClosing ? 'closing' : 'open'}
                 className={joinClasses(
-                  'bg-panel border-line relative z-10 flex max-h-[90svh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border shadow-[0_28px_90px_rgba(15,23,42,0.24)] md:max-h-[88vh]',
+                  'bg-panel border-line relative z-10 flex max-h-[90svh] w-full max-w-3xl transform-gpu flex-col overflow-hidden rounded-lg border shadow-[0_28px_90px_rgba(15,23,42,0.24)] will-change-transform md:max-h-[88vh]',
                   isClosing
-                    ? 'animate-[modalGrowOut_180ms_ease-in_both]'
-                    : 'animate-[modalGrowIn_220ms_cubic-bezier(0.16,1,0.3,1)_both]',
+                    ? 'animate-[modalGrowOut_220ms_ease-in_both]'
+                    : 'animate-[modalGrowIn_260ms_cubic-bezier(0.16,1,0.3,1)_both]',
                   isSheetModal && 'min-h-[50svh]',
                   className,
                 )}
@@ -321,7 +321,7 @@ export function Modal({
                       event.stopPropagation();
                       close();
                     }}
-                    className="text-muted hover:bg-panel-soft hover:text-foreground focus:ring-control-soft flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition focus:ring-4 focus:outline-none"
+                    className="text-muted hover:bg-panel-soft hover:text-foreground flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition focus:outline-none active:translate-y-px active:scale-95"
                     aria-label="Close modal"
                   >
                     <svg

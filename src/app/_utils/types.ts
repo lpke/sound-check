@@ -10,12 +10,8 @@ export type PermissionState = 'idle' | 'granted' | 'blocked';
 export type RoutedMode = 'clip' | 'idle' | 'monitor' | 'speakerTest';
 export type StatusTone = 'danger' | 'good' | 'idle' | 'warn';
 export type SectionSignalState = 'active' | 'off' | 'ready';
-export type SpeakerTestKind =
-  | 'builtInMusic'
-  | 'fileMusic'
-  | 'modulatedTone'
-  | 'sweep'
-  | 'tone';
+export type SpeakerTestKind = 'modulatedTone' | 'music' | 'sweep' | 'tone';
+export type SpeakerMusicSource = 'builtIn' | 'file';
 
 export type AudioDevice = Pick<
   MediaDeviceInfo,
@@ -44,7 +40,12 @@ export type ActiveInputAnalyser = {
 export type ActiveOutputGraph = {
   cancel: () => void;
   context: AudioContext;
+  durationSeconds?: number;
+  getCurrentTime?: () => number;
+  isPaused?: () => boolean;
   mode: RoutedMode;
+  pause?: () => void;
+  playFrom?: (offsetSeconds: number) => void;
   updateDelay?: (seconds: number) => void;
 };
 
@@ -67,6 +68,7 @@ export type SpeakerTestSettings = {
   kind: SpeakerTestKind;
   toneFrequency: number;
   musicFile: File | null;
+  musicSource: SpeakerMusicSource;
 };
 
 export type LevelSetter = Dispatch<SetStateAction<number>>;

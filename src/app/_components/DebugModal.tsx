@@ -140,8 +140,10 @@ export function DebugModal({ soundCheck }: DebugModalProps) {
                 type: soundCheck.speakerTestSettings.musicFile.type,
               }
             : null,
+          musicSource: soundCheck.speakerTestSettings.musicSource,
           toneFrequency: soundCheck.speakerTestSettings.toneFrequency,
         },
+        musicPlayback: soundCheck.musicPlayback,
       };
     }
 
@@ -191,9 +193,9 @@ export function DebugModal({ soundCheck }: DebugModalProps) {
       title="Audio debug information"
       modalAriaLabel="Audio debug information"
       triggerAriaLabel="Open audio debug information"
-      triggerClassName="rounded-lg focus:ring-4 focus:ring-control-soft focus:outline-none"
+      triggerClassName="rounded-lg transition active:translate-y-px active:scale-[0.985] focus:outline-none"
       trigger={
-        <span className="border-line bg-panel hover:bg-panel-soft inline-flex h-10 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition">
+        <span className="border-line bg-panel hover:bg-panel-soft inline-flex h-10 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition select-none">
           Debug
         </span>
       }
@@ -203,7 +205,7 @@ export function DebugModal({ soundCheck }: DebugModalProps) {
           {debugSections.map((section) => (
             <label
               key={section.key}
-              className="border-line bg-panel-soft flex items-center gap-2 rounded-lg border px-3 py-2 text-sm"
+              className="border-line bg-panel-soft flex items-center gap-2 rounded-lg border px-3 py-2 text-sm select-none"
             >
               <input
                 type="checkbox"
@@ -233,12 +235,12 @@ export function DebugModal({ soundCheck }: DebugModalProps) {
             title="Copy debug JSON"
             onClick={copyDebugText}
             className={joinClasses(
-              'absolute top-2 right-2 z-10 inline-flex h-8 w-8 items-center justify-center rounded-md border text-sm opacity-0 transition group-hover/debug-field:opacity-100 focus:opacity-100 focus:ring-4 focus:outline-none',
+              'absolute top-2 right-2 z-10 inline-flex h-8 w-8 items-center justify-center rounded-md border text-sm opacity-0 transition group-hover/debug-field:opacity-100 focus:opacity-100 focus:outline-none active:translate-y-px active:scale-95',
               copyState === 'copied'
-                ? 'border-signal/30 bg-signal-soft text-signal focus:ring-control-soft'
+                ? 'border-signal/30 bg-signal-soft text-signal'
                 : copyState === 'failed'
-                  ? 'border-danger/30 bg-danger-soft text-danger focus:ring-danger-soft'
-                  : 'border-line bg-panel/90 text-muted hover:bg-panel hover:text-foreground focus:ring-control-soft',
+                  ? 'border-danger/30 bg-danger-soft text-danger'
+                  : 'border-line bg-panel/90 text-muted hover:bg-panel hover:text-foreground',
             )}
           >
             {copyState === 'copied' ? (

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { StatusTone } from '@/utils/types';
 import { clamp, joinClasses } from '@/utils/utils';
 
@@ -56,17 +56,17 @@ export function Button({
       disabled={disabled}
       onClick={onClick}
       className={joinClasses(
-        'inline-flex h-11 items-center justify-center rounded-lg border px-4 text-sm font-semibold transition focus:ring-4 focus:outline-none disabled:opacity-50',
+        'inline-flex h-11 items-center justify-center rounded-lg border px-4 text-sm font-semibold transition focus:outline-none active:translate-y-px active:scale-[0.985] disabled:opacity-50 disabled:active:translate-y-0 disabled:active:scale-100',
         variant === 'primary' &&
-          'border-control bg-control text-on-control hover:bg-control-hover focus:ring-control-soft',
+          'border-control bg-control text-on-control hover:bg-control-hover',
         variant === 'secondary' &&
-          'border-line bg-panel-soft text-foreground hover:bg-panel-strong focus:ring-control-soft',
+          'border-line bg-panel-soft text-foreground hover:bg-panel-strong',
         variant === 'outputPrimary' &&
-          'border-output bg-output text-on-control hover:bg-output/90 focus:ring-output-soft',
+          'border-output bg-output text-on-control hover:bg-output/90',
         variant === 'outputSecondary' &&
-          'border-output/25 bg-output-soft text-output hover:border-output/35 hover:bg-output-soft/70 focus:ring-output-soft',
+          'border-output/25 bg-output-soft text-output hover:border-output/35 hover:bg-output-soft/70',
         variant === 'danger' &&
-          'border-danger bg-danger hover:bg-danger/90 focus:ring-danger-soft text-white',
+          'border-danger bg-danger hover:bg-danger/90 text-white',
       )}
     >
       {children}
@@ -147,27 +147,62 @@ export function LevelMeter({
 }) {
   const boundedLevel = clamp(level, 0, 1);
   const [peakLevel, setPeakLevel] = useState(0);
-  const segments = Array.from({ length: 36 }, (_, index) => index);
+  const [isPeakVisible, setIsPeakVisible] = useState(false);
+  const latestLevelRef = useRef(boundedLevel);
+  const fadeTimerRef = useRef<number | null>(null);
+  const dropTimerRef = useRef<number | null>(null);
+  const segments = Array.from({ length: 48 }, (_, index) => index);
   const activeSegments = Math.round(boundedLevel * segments.length);
   const peakSegment = Math.max(0, Math.ceil(peakLevel * segments.length) - 1);
 
   useEffect(() => {
-    if (boundedLevel === peakLevel) {
+    latestLevelRef.current = boundedLevel;
+  }, [boundedLevel]);
+
+  useEffect(() => {
+    if (boundedLevel <= peakLevel) {
       return undefined;
     }
 
-    const timeout = window.setTimeout(
-      () => setPeakLevel(boundedLevel),
-      boundedLevel > peakLevel ? 0 : 1100,
-    );
+    const animationFrame = window.requestAnimationFrame(() => {
+      if (fadeTimerRef.current !== null) {
+        window.clearTimeout(fadeTimerRef.current);
+      }
 
-    return () => window.clearTimeout(timeout);
+      if (dropTimerRef.current !== null) {
+        window.clearTimeout(dropTimerRef.current);
+      }
+
+      setPeakLevel(boundedLevel);
+      setIsPeakVisible(boundedLevel > 0);
+
+      fadeTimerRef.current = window.setTimeout(() => {
+        setIsPeakVisible(false);
+      }, 1000);
+      dropTimerRef.current = window.setTimeout(() => {
+        setPeakLevel(latestLevelRef.current);
+      }, 1350);
+    });
+
+    return () => window.cancelAnimationFrame(animationFrame);
   }, [boundedLevel, peakLevel]);
+
+  useEffect(() => {
+    return () => {
+      if (fadeTimerRef.current !== null) {
+        window.clearTimeout(fadeTimerRef.current);
+      }
+
+      if (dropTimerRef.current !== null) {
+        window.clearTimeout(dropTimerRef.current);
+      }
+    };
+  }, []);
 
   return (
     <div
       className={joinClasses(
-        'bg-panel-strong grid h-3 grid-cols-[repeat(36,minmax(0,1fr))] overflow-hidden',
+        'bg-panel-strong grid h-3 grid-cols-[repeat(48,minmax(0,1fr))] overflow-hidden',
         className,
       )}
     >
@@ -189,7 +224,9 @@ export function LevelMeter({
                 segment < activeSegments - 1 &&
                 'after:absolute after:top-0 after:right-0 after:h-full after:w-px after:bg-white/35',
               isPeak &&
-                'before:bg-foreground/70 before:absolute before:top-0 before:right-0 before:z-10 before:h-full before:w-0.5',
+                'before:bg-foreground/70 before:absolute before:top-0 before:right-0 before:z-10 before:h-full before:w-0.5 before:transition-opacity before:duration-300',
+              isPeak &&
+                (isPeakVisible ? 'before:opacity-100' : 'before:opacity-0'),
             )}
           />
         );

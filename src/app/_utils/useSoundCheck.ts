@@ -9,10 +9,10 @@ import {
   useState,
 } from 'react';
 import {
-  createAudioBufferOutputGraph,
   createClipOutputGraph,
   createInputAnalyser,
   createMonitorOutputGraph,
+  createMusicOutputGraph,
   createSpeakerTestOutputGraph,
 } from './audio';
 import {
@@ -39,6 +39,7 @@ import {
   type ProcessingSettings,
   type RoutedMode,
   type SectionSignalState,
+  type SpeakerMusicSource,
   type SpeakerTestKind,
   type SpeakerTestSettings,
 } from './types';
@@ -54,7 +55,15 @@ const defaultProcessingSettings: ProcessingSettings = {
 const defaultSpeakerTestSettings: SpeakerTestSettings = {
   kind: 'tone',
   musicFile: null,
+  musicSource: 'builtIn',
   toneFrequency: 440,
+};
+
+type MusicPlaybackState = {
+  durationSeconds: number;
+  isPlaying: boolean;
+  markSeconds: number | null;
+  positionSeconds: number;
 };
 
 export function useSoundCheck() {
@@ -62,6 +71,8 @@ export function useSoundCheck() {
   const inputStreamRef = useRef<MediaStream | null>(null);
   const inputAnalyserRef = useRef<ActiveInputAnalyser | null>(null);
   const outputGraphRef = useRef<ActiveOutputGraph | null>(null);
+  const musicProgressTimerRef = useRef<number | null>(null);
+  const pendingMusicStartAtRef = useRef<number | null>(null);
 
   const [isSupported, setIsSupported] = useState(true);
   const [canRouteOutput, setCanRouteOutput] = useState(true);
@@ -82,6 +93,12 @@ export function useSoundCheck() {
     useState<ProcessingSettings>(defaultProcessingSettings);
   const [speakerTestSettings, setSpeakerTestSettings] =
     useState<SpeakerTestSettings>(defaultSpeakerTestSettings);
+  const [musicPlayback, setMusicPlayback] = useState<MusicPlaybackState>({
+    durationSeconds: 0,
+    isPlaying: false,
+    markSeconds: null,
+    positionSeconds: 0,
+  });
   const [monitorEnabled, setMonitorEnabled] = useState(false);
   const [monitorDelayMs, setMonitorDelayMs] = useState(0);
   const [routedMode, setRoutedMode] = useState<RoutedMode>('idle');
@@ -149,6 +166,45 @@ export function useSoundCheck() {
         : 'ready';
   const allAudioStopped = appPaused || (inputMuted && outputMuted);
 
+  const stopMusicProgressLoop = useCallback(() => {
+    if (musicProgressTimerRef.current === null) {
+      return;
+    }
+
+    window.clearInterval(musicProgressTimerRef.current);
+    musicProgressTimerRef.current = null;
+  }, []);
+
+  const startMusicProgressLoop = useCallback(() => {
+    stopMusicProgressLoop();
+
+    const syncMusicPlayback = () => {
+      const activeGraph = outputGraphRef.current;
+
+      if (!activeGraph?.getCurrentTime) {
+        return;
+      }
+
+      const durationSeconds =
+        activeGraph.durationSeconds ?? musicPlayback.durationSeconds;
+      const positionSeconds = clamp(
+        activeGraph.getCurrentTime(),
+        0,
+        durationSeconds || 0,
+      );
+
+      setMusicPlayback((currentPlayback) => ({
+        ...currentPlayback,
+        durationSeconds,
+        isPlaying: !activeGraph.isPaused?.(),
+        positionSeconds,
+      }));
+    };
+
+    syncMusicPlayback();
+    musicProgressTimerRef.current = window.setInterval(syncMusicPlayback, 120);
+  }, [musicPlayback.durationSeconds, stopMusicProgressLoop]);
+
   const stopInputAnalyser = useCallback(() => {
     const activeAnalyser = inputAnalyserRef.current;
     if (!activeAnalyser) {
@@ -173,6 +229,7 @@ export function useSoundCheck() {
   const stopOutputGraph = useCallback(() => {
     const activeGraph = outputGraphRef.current;
 
+    stopMusicProgressLoop();
     outputGraphRef.current = null;
 
     if (activeGraph) {
@@ -189,8 +246,13 @@ export function useSoundCheck() {
     }
 
     setOutputLevel(0);
+    setMusicPlayback((currentPlayback) => ({
+      ...currentPlayback,
+      isPlaying: false,
+      positionSeconds: 0,
+    }));
     setRoutedMode('idle');
-  }, []);
+  }, [stopMusicProgressLoop]);
 
   const refreshDevices = useCallback(async () => {
     if (!navigator.mediaDevices?.enumerateDevices) {
@@ -349,9 +411,31 @@ export function useSoundCheck() {
     stopOutputGraph();
 
     try {
-      if (speakerTestSettings.kind === 'builtInMusic') {
-        outputGraphRef.current = await createAudioBufferOutputGraph({
+      if (speakerTestSettings.kind === 'music') {
+        const startAtSeconds =
+          pendingMusicStartAtRef.current ?? musicPlayback.positionSeconds;
+
+        pendingMusicStartAtRef.current = null;
+
+        if (
+          speakerTestSettings.musicSource === 'file' &&
+          !speakerTestSettings.musicFile
+        ) {
+          setStatusMessage('Choose an audio file before playing.');
+          return;
+        }
+
+        outputGraphRef.current = await createMusicOutputGraph({
           getArrayBuffer: async () => {
+            if (speakerTestSettings.musicSource === 'file') {
+              return (
+                speakerTestSettings.musicFile?.arrayBuffer() ??
+                Promise.reject(
+                  new Error('Choose an audio file before playing.'),
+                )
+              );
+            }
+
             const response = await fetch('/audio/blinding-lights.flac');
 
             if (!response.ok) {
@@ -363,21 +447,22 @@ export function useSoundCheck() {
           onEnded: stopOutputGraph,
           routeStreamToOutput,
           setOutputLevel,
+          startAtSeconds,
         });
-      } else if (speakerTestSettings.kind === 'fileMusic') {
-        if (!speakerTestSettings.musicFile) {
-          setStatusMessage('Choose an audio file before playing.');
-          return;
-        }
-
-        outputGraphRef.current = await createAudioBufferOutputGraph({
-          getArrayBuffer: () =>
-            speakerTestSettings.musicFile?.arrayBuffer() ??
-            Promise.reject(new Error('Choose an audio file before playing.')),
-          onEnded: stopOutputGraph,
-          routeStreamToOutput,
-          setOutputLevel,
-        });
+        setMusicPlayback((currentPlayback) => ({
+          ...currentPlayback,
+          durationSeconds:
+            outputGraphRef.current?.durationSeconds ??
+            currentPlayback.durationSeconds,
+          isPlaying: true,
+          positionSeconds: clamp(
+            startAtSeconds,
+            0,
+            outputGraphRef.current?.durationSeconds ??
+              currentPlayback.durationSeconds,
+          ),
+        }));
+        startMusicProgressLoop();
       } else {
         outputGraphRef.current = await createSpeakerTestOutputGraph({
           kind: speakerTestSettings.kind,
@@ -389,7 +474,11 @@ export function useSoundCheck() {
       }
 
       setRoutedMode('speakerTest');
-      setStatusMessage(`Playing test sound on ${selectedOutputName}.`);
+      setStatusMessage(
+        speakerTestSettings.kind === 'music'
+          ? `Playing music on ${selectedOutputName}.`
+          : `Playing test sound on ${selectedOutputName}.`,
+      );
     } catch (error) {
       stopOutputGraph();
       setErrorMessage(toErrorMessage(error));
@@ -397,10 +486,161 @@ export function useSoundCheck() {
   }, [
     appPaused,
     outputMuted,
+    musicPlayback.positionSeconds,
     routeStreamToOutput,
     selectedOutputName,
     speakerTestSettings,
+    startMusicProgressLoop,
     stopOutputGraph,
+  ]);
+
+  const pauseMusicPlayback = useCallback(() => {
+    const activeGraph = outputGraphRef.current;
+
+    if (!activeGraph?.pause) {
+      return;
+    }
+
+    const positionSeconds =
+      activeGraph.getCurrentTime?.() ?? musicPlayback.positionSeconds;
+
+    activeGraph.pause();
+    stopMusicProgressLoop();
+    setMusicPlayback((currentPlayback) => ({
+      ...currentPlayback,
+      durationSeconds:
+        activeGraph.durationSeconds ?? currentPlayback.durationSeconds,
+      isPlaying: false,
+      positionSeconds,
+    }));
+    setStatusMessage('Music paused.');
+  }, [musicPlayback.positionSeconds, stopMusicProgressLoop]);
+
+  const resumeMusicPlayback = useCallback(() => {
+    if (appPaused || outputMuted) {
+      setStatusMessage(
+        outputMuted
+          ? 'Unmute the speaker section before playing audio.'
+          : 'Resume the app before playing audio.',
+      );
+      return;
+    }
+
+    const activeGraph = outputGraphRef.current;
+
+    if (activeGraph?.playFrom) {
+      activeGraph.playFrom(musicPlayback.positionSeconds);
+      setMusicPlayback((currentPlayback) => ({
+        ...currentPlayback,
+        isPlaying: true,
+      }));
+      startMusicProgressLoop();
+      setStatusMessage(`Playing music on ${selectedOutputName}.`);
+      return;
+    }
+
+    pendingMusicStartAtRef.current = musicPlayback.positionSeconds;
+    void startSpeakerTest();
+  }, [
+    appPaused,
+    musicPlayback.positionSeconds,
+    outputMuted,
+    selectedOutputName,
+    startMusicProgressLoop,
+    startSpeakerTest,
+  ]);
+
+  const toggleMusicPlayback = useCallback(() => {
+    if (musicPlayback.isPlaying) {
+      pauseMusicPlayback();
+      return;
+    }
+
+    resumeMusicPlayback();
+  }, [musicPlayback.isPlaying, pauseMusicPlayback, resumeMusicPlayback]);
+
+  const handleMusicSeek = useCallback(
+    (positionSeconds: number) => {
+      const activeGraph = outputGraphRef.current;
+      const durationSeconds =
+        activeGraph?.durationSeconds ?? musicPlayback.durationSeconds;
+      const nextPosition = clamp(positionSeconds, 0, durationSeconds || 0);
+      const wasPlaying = activeGraph?.isPaused
+        ? !activeGraph.isPaused()
+        : false;
+
+      if (activeGraph?.playFrom) {
+        activeGraph.playFrom(nextPosition);
+
+        if (wasPlaying) {
+          startMusicProgressLoop();
+        } else {
+          activeGraph.pause?.();
+          stopMusicProgressLoop();
+        }
+      }
+
+      setMusicPlayback((currentPlayback) => ({
+        ...currentPlayback,
+        durationSeconds,
+        isPlaying: wasPlaying,
+        positionSeconds: nextPosition,
+      }));
+    },
+    [
+      musicPlayback.durationSeconds,
+      startMusicProgressLoop,
+      stopMusicProgressLoop,
+    ],
+  );
+
+  const markMusicPosition = useCallback(() => {
+    const activeGraph = outputGraphRef.current;
+    const durationSeconds =
+      activeGraph?.durationSeconds ?? musicPlayback.durationSeconds;
+    const positionSeconds = clamp(
+      activeGraph?.getCurrentTime?.() ?? musicPlayback.positionSeconds,
+      0,
+      durationSeconds || 0,
+    );
+
+    setMusicPlayback((currentPlayback) => ({
+      ...currentPlayback,
+      markSeconds: positionSeconds,
+      positionSeconds,
+    }));
+  }, [musicPlayback.durationSeconds, musicPlayback.positionSeconds]);
+
+  const playMusicFromMark = useCallback(() => {
+    if (musicPlayback.markSeconds === null) {
+      return;
+    }
+
+    const activeGraph = outputGraphRef.current;
+
+    if (activeGraph?.playFrom) {
+      activeGraph.playFrom(musicPlayback.markSeconds);
+      startMusicProgressLoop();
+      setMusicPlayback((currentPlayback) => ({
+        ...currentPlayback,
+        isPlaying: true,
+        positionSeconds: musicPlayback.markSeconds ?? 0,
+      }));
+      setStatusMessage(`Playing music on ${selectedOutputName}.`);
+      return;
+    }
+
+    pendingMusicStartAtRef.current = musicPlayback.markSeconds;
+    setMusicPlayback((currentPlayback) => ({
+      ...currentPlayback,
+      positionSeconds: musicPlayback.markSeconds ?? 0,
+    }));
+    void startSpeakerTest();
+  }, [
+    musicPlayback.markSeconds,
+    selectedOutputName,
+    startMusicProgressLoop,
+    startSpeakerTest,
   ]);
 
   const startMonitor = useCallback(async () => {
@@ -622,12 +862,27 @@ export function useSoundCheck() {
     [],
   );
 
-  const handleSpeakerTestKindChange = useCallback((kind: SpeakerTestKind) => {
-    setSpeakerTestSettings((currentSettings) => ({
-      ...currentSettings,
-      kind,
-    }));
-  }, []);
+  const handleSpeakerTestKindChange = useCallback(
+    (kind: SpeakerTestKind) => {
+      if (routedMode === 'speakerTest') {
+        stopOutputGraph();
+      }
+
+      setSpeakerTestSettings((currentSettings) => ({
+        ...currentSettings,
+        kind,
+      }));
+
+      if (kind !== 'music') {
+        setMusicPlayback((currentPlayback) => ({
+          ...currentPlayback,
+          isPlaying: false,
+          positionSeconds: 0,
+        }));
+      }
+    },
+    [routedMode, stopOutputGraph],
+  );
 
   const handleSpeakerToneFrequencyChange = useCallback((frequency: number) => {
     setSpeakerTestSettings((currentSettings) => ({
@@ -636,12 +891,48 @@ export function useSoundCheck() {
     }));
   }, []);
 
-  const handleSpeakerMusicFileChange = useCallback((musicFile: File | null) => {
-    setSpeakerTestSettings((currentSettings) => ({
-      ...currentSettings,
-      musicFile,
-    }));
-  }, []);
+  const handleSpeakerMusicSourceChange = useCallback(
+    (musicSource: SpeakerMusicSource) => {
+      if (routedMode === 'speakerTest') {
+        stopOutputGraph();
+      }
+
+      setSpeakerTestSettings((currentSettings) => ({
+        ...currentSettings,
+        musicSource,
+      }));
+      setMusicPlayback((currentPlayback) => ({
+        ...currentPlayback,
+        durationSeconds: 0,
+        isPlaying: false,
+        markSeconds: null,
+        positionSeconds: 0,
+      }));
+    },
+    [routedMode, stopOutputGraph],
+  );
+
+  const handleSpeakerMusicFileChange = useCallback(
+    (musicFile: File | null) => {
+      if (routedMode === 'speakerTest') {
+        stopOutputGraph();
+      }
+
+      setSpeakerTestSettings((currentSettings) => ({
+        ...currentSettings,
+        musicFile,
+        musicSource: musicFile ? 'file' : currentSettings.musicSource,
+      }));
+      setMusicPlayback((currentPlayback) => ({
+        ...currentPlayback,
+        durationSeconds: 0,
+        isPlaying: false,
+        markSeconds: null,
+        positionSeconds: 0,
+      }));
+    },
+    [routedMode, stopOutputGraph],
+  );
 
   const handleProcessingEnabledChange = useCallback(
     (enabled: boolean) => {
@@ -787,6 +1078,7 @@ export function useSoundCheck() {
     processingEnabled,
     processingSettings,
     speakerTestSettings,
+    musicPlayback,
     monitorEnabled,
     monitorDelayMs,
     routedMode,
@@ -807,6 +1099,12 @@ export function useSoundCheck() {
     refreshDevices,
     startSpeakerTest,
     stopOutputGraph,
+    pauseMusicPlayback,
+    resumeMusicPlayback,
+    toggleMusicPlayback,
+    handleMusicSeek,
+    markMusicPosition,
+    playMusicFromMark,
     startMonitor,
     stopMonitor,
     startRecording,
@@ -817,6 +1115,7 @@ export function useSoundCheck() {
     handleInputChange,
     handleOutputChange,
     handleSpeakerMusicFileChange,
+    handleSpeakerMusicSourceChange,
     handleSpeakerTestKindChange,
     handleSpeakerToneFrequencyChange,
     handleProcessingEnabledChange,

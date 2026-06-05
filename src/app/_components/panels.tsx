@@ -4,6 +4,7 @@ import {
   type ChangeEvent,
   type ComponentType,
   type ReactNode,
+  type RefObject,
   type SVGProps,
 } from 'react';
 import type { SoundCheckController } from '@/utils/useSoundCheck';
@@ -12,9 +13,10 @@ import {
   MAX_MONITOR_DELAY_MS,
   type AudioDevice,
   type SectionSignalState,
+  type SpeakerMusicSource,
   type SpeakerTestKind,
 } from '@/utils/types';
-import { formatSeconds, joinClasses } from '@/utils/utils';
+import { clamp, formatSeconds, joinClasses } from '@/utils/utils';
 import { DebugModal } from './DebugModal';
 import { Button, Field, LevelMeter, Panel } from './ui';
 
@@ -29,8 +31,7 @@ const speakerTestOptions: { kind: SpeakerTestKind; label: string }[] = [
   { kind: 'tone', label: 'Steady tone' },
   { kind: 'modulatedTone', label: 'Modulating tone' },
   { kind: 'sweep', label: 'Frequency sweep' },
-  { kind: 'builtInMusic', label: 'Built-in music' },
-  { kind: 'fileMusic', label: 'Music file' },
+  { kind: 'music', label: 'Music' },
 ];
 
 export function SiteHeader({ soundCheck }: SoundCheckProps) {
@@ -41,10 +42,10 @@ export function SiteHeader({ soundCheck }: SoundCheckProps) {
         type="button"
         onClick={soundCheck.toggleAllAudio}
         className={joinClasses(
-          'inline-flex h-10 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-semibold transition focus:ring-4 focus:outline-none',
+          'inline-flex h-10 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-semibold transition focus:outline-none active:translate-y-px active:scale-[0.985]',
           soundCheck.allAudioStopped
-            ? 'border-control bg-control text-on-control hover:bg-control-hover focus:ring-control-soft'
-            : 'border-line bg-panel text-foreground hover:bg-panel-soft focus:ring-control-soft',
+            ? 'border-control bg-control text-on-control hover:bg-control-hover'
+            : 'border-line bg-panel text-foreground hover:bg-panel-soft',
         )}
       >
         {soundCheck.allAudioStopped ? (
@@ -106,7 +107,9 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
   const isOutputStopped = soundCheck.appPaused || soundCheck.outputMuted;
   const testKind = soundCheck.speakerTestSettings.kind;
   const needsFrequency = usesToneFrequency(testKind);
-  const needsFile = testKind === 'fileMusic';
+  const needsFile =
+    testKind === 'music' &&
+    soundCheck.speakerTestSettings.musicSource === 'file';
   const isSpeakerTestActive = soundCheck.routedMode === 'speakerTest';
   const isOutputBusy =
     soundCheck.routedMode !== 'idle' && soundCheck.routedMode !== 'speakerTest';
@@ -115,8 +118,14 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
     const nextKind = event.target.value as SpeakerTestKind;
 
     soundCheck.handleSpeakerTestKindChange(nextKind);
+  }
 
-    if (nextKind === 'fileMusic') {
+  function handleMusicSourceChange(event: ChangeEvent<HTMLSelectElement>) {
+    const musicSource = event.target.value as SpeakerMusicSource;
+
+    soundCheck.handleSpeakerMusicSourceChange(musicSource);
+
+    if (musicSource === 'file' && !soundCheck.speakerTestSettings.musicFile) {
       window.setTimeout(() => musicFileInputRef.current?.click(), 0);
     }
   }
@@ -233,19 +242,12 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
               }
             />
 
-            {needsFile ? (
-              <div className="border-line bg-panel flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-foreground truncate text-sm font-semibold">
-                  {soundCheck.speakerTestSettings.musicFile?.name ??
-                    'No file selected'}
-                </p>
-                <Button
-                  variant="outputSecondary"
-                  onClick={() => musicFileInputRef.current?.click()}
-                >
-                  Choose file
-                </Button>
-              </div>
+            {testKind === 'music' ? (
+              <MusicConfig
+                musicFileInputRef={musicFileInputRef}
+                onMusicSourceChange={handleMusicSourceChange}
+                soundCheck={soundCheck}
+              />
             ) : null}
 
             <div className="flex flex-wrap gap-2">
@@ -259,7 +261,7 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
                   (needsFile && !soundCheck.speakerTestSettings.musicFile)
                 }
               >
-                Play test sound
+                {testKind === 'music' ? 'Play music' : 'Play test sound'}
               </Button>
               {isSpeakerTestActive && !soundCheck.appPaused ? (
                 <Button
@@ -346,12 +348,12 @@ function SectionHeader({
         title={toggleLabel}
         onClick={onToggleMute}
         className={joinClasses(
-          'flex h-11 w-11 shrink-0 items-center justify-center rounded-full border text-white transition focus:ring-4 focus:outline-none',
+          'flex h-11 w-11 shrink-0 items-center justify-center rounded-full border text-white transition focus:outline-none active:translate-y-px active:scale-95',
           muted
-            ? 'border-line bg-muted/55 focus:ring-panel-strong'
+            ? 'border-line bg-muted/55'
             : accent === 'input'
-              ? 'border-input bg-input hover:bg-input/90 focus:ring-input-soft'
-              : 'border-output bg-output hover:bg-output/90 focus:ring-output-soft',
+              ? 'border-input bg-input hover:bg-input/90'
+              : 'border-output bg-output hover:bg-output/90',
         )}
       >
         <Icon aria-hidden="true" className="h-5 w-5" />
@@ -643,6 +645,109 @@ function RecordingPlayback({ soundCheck }: SoundCheckProps) {
   );
 }
 
+function MusicConfig({
+  musicFileInputRef,
+  onMusicSourceChange,
+  soundCheck,
+}: SoundCheckProps & {
+  musicFileInputRef: RefObject<HTMLInputElement | null>;
+  onMusicSourceChange: (event: ChangeEvent<HTMLSelectElement>) => void;
+}) {
+  const { durationSeconds, isPlaying, markSeconds, positionSeconds } =
+    soundCheck.musicPlayback;
+  const hasLoadedMusic = durationSeconds > 0;
+  const canUseTransport =
+    soundCheck.speakerTestSettings.kind === 'music' &&
+    !soundCheck.appPaused &&
+    !soundCheck.outputMuted &&
+    (hasLoadedMusic || soundCheck.routedMode === 'speakerTest');
+
+  return (
+    <div className="grid gap-4">
+      <Field label="Music source">
+        <select
+          id="speaker-music-source"
+          name="speaker-music-source"
+          value={soundCheck.speakerTestSettings.musicSource}
+          onChange={onMusicSourceChange}
+          className={controlClassName('output')}
+        >
+          <option value="builtIn">Blinding Lights</option>
+          <option value="file">Audio file</option>
+        </select>
+      </Field>
+
+      {soundCheck.speakerTestSettings.musicSource === 'file' ? (
+        <div className="border-line bg-panel flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-foreground truncate text-sm font-semibold">
+            {soundCheck.speakerTestSettings.musicFile?.name ??
+              'No file selected'}
+          </p>
+          <Button
+            variant="outputSecondary"
+            onClick={() => musicFileInputRef.current?.click()}
+          >
+            Choose file
+          </Button>
+        </div>
+      ) : null}
+
+      {hasLoadedMusic || positionSeconds > 0 ? (
+        <div className="grid gap-3">
+          <div className="grid gap-2">
+            <div className="text-muted flex items-center justify-between gap-3 text-xs font-semibold">
+              <span>{formatSeconds(positionSeconds)}</span>
+              <span>{formatSeconds(durationSeconds)}</span>
+            </div>
+            <input
+              aria-label="Music playback position"
+              type="range"
+              min={0}
+              max={durationSeconds || 0}
+              step={0.05}
+              value={clamp(positionSeconds, 0, durationSeconds || 0)}
+              onChange={(event) =>
+                soundCheck.handleMusicSeek(Number(event.target.value))
+              }
+              className={rangeClassName('output')}
+            />
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outputSecondary"
+              onClick={soundCheck.toggleMusicPlayback}
+              disabled={!canUseTransport}
+            >
+              {isPlaying ? 'Pause music' : 'Play music'}
+            </Button>
+            <Button
+              variant="outputSecondary"
+              onClick={soundCheck.markMusicPosition}
+              disabled={!hasLoadedMusic}
+            >
+              Mark part
+            </Button>
+            {markSeconds !== null ? (
+              <Button
+                variant="outputSecondary"
+                onClick={soundCheck.playMusicFromMark}
+                disabled={
+                  soundCheck.appPaused ||
+                  soundCheck.outputMuted ||
+                  !hasLoadedMusic
+                }
+              >
+                Jump to {formatSeconds(markSeconds)}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function SettingsGroup({
   children,
   description,
@@ -695,9 +800,9 @@ function RefreshButton({
       title={label}
       onClick={handleClick}
       className={joinClasses(
-        'text-muted hover:text-foreground flex h-9 w-9 items-center justify-center rounded-lg bg-transparent transition focus:ring-4 focus:outline-none',
-        accent === 'input' && 'hover:bg-input/10 focus:ring-input-soft',
-        accent === 'output' && 'hover:bg-output/10 focus:ring-output-soft',
+        'text-muted hover:text-foreground flex h-9 w-9 items-center justify-center rounded-lg bg-transparent transition focus:outline-none active:translate-y-px active:scale-95',
+        accent === 'input' && 'hover:bg-input/[0.08]',
+        accent === 'output' && 'hover:bg-output/[0.08]',
       )}
     >
       <Icon

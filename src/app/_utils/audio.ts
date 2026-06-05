@@ -14,7 +14,8 @@ const preferredMimeTypes = [
   'audio/mp4',
   'audio/ogg;codecs=opus',
 ];
-const BUFFER_PLAYBACK_START_DELAY_SECONDS = 0.14;
+const OUTPUT_PIPELINE_WARMUP_MS = 240;
+const SOURCE_START_DELAY_SECONDS = 0.03;
 
 export function createAudioContext() {
   const AudioContextConstructor =
@@ -62,7 +63,7 @@ export async function createSpeakerTestOutputGraph({
   setOutputLevel,
   toneFrequency,
 }: {
-  kind: Exclude<SpeakerTestKind, 'builtInMusic' | 'fileMusic'>;
+  kind: Exclude<SpeakerTestKind, 'music'>;
   onEnded: () => void;
   routeStreamToOutput: (stream: MediaStream) => Promise<void>;
   setOutputLevel: LevelSetter;
@@ -75,30 +76,19 @@ export async function createSpeakerTestOutputGraph({
   const modulationGain = context.createGain();
   const analyser = context.createAnalyser();
   const destination = context.createMediaStreamDestination();
-  const now = context.currentTime;
+  const durationSeconds =
+    kind === 'sweep' ? 8 : kind === 'modulatedTone' ? 6 : 3;
   const durationMs =
     kind === 'sweep' ? 8000 : kind === 'modulatedTone' ? 6000 : 3000;
   const frequency = clamp(toneFrequency, 40, 12000);
 
   analyser.fftSize = 1024;
   oscillator.type = 'sine';
-  oscillator.frequency.setValueAtTime(frequency, now);
 
   if (kind === 'modulatedTone') {
-    modulation.frequency.setValueAtTime(5, now);
-    modulationGain.gain.setValueAtTime(frequency * 0.06, now);
     modulation.connect(modulationGain);
     modulationGain.connect(oscillator.frequency);
   }
-
-  if (kind === 'sweep') {
-    oscillator.frequency.exponentialRampToValueAtTime(
-      clamp(frequency * 4, 160, 12000),
-      now + durationMs / 1000,
-    );
-  }
-
-  gain.gain.setValueAtTime(0.18, now);
 
   oscillator.connect(gain);
   gain.connect(analyser);
@@ -106,14 +96,42 @@ export async function createSpeakerTestOutputGraph({
 
   await routeStreamToOutput(destination.stream);
   await context.resume();
+  await warmOutputPipeline();
 
-  oscillator.start();
+  const startAt = context.currentTime + SOURCE_START_DELAY_SECONDS;
+  const stopAt = startAt + durationSeconds;
+
+  oscillator.frequency.setValueAtTime(frequency, startAt);
+
   if (kind === 'modulatedTone') {
-    modulation.start();
+    modulation.frequency.setValueAtTime(5, startAt);
+    modulationGain.gain.setValueAtTime(frequency * 0.06, startAt);
+  }
+
+  if (kind === 'sweep') {
+    oscillator.frequency.exponentialRampToValueAtTime(
+      clamp(frequency * 4, 160, 12000),
+      stopAt,
+    );
+  }
+
+  gain.gain.setValueAtTime(0, startAt);
+  gain.gain.linearRampToValueAtTime(0.18, startAt + 0.025);
+  gain.gain.setValueAtTime(0.18, Math.max(startAt, stopAt - 0.035));
+  gain.gain.linearRampToValueAtTime(0, stopAt);
+
+  oscillator.start(startAt);
+  oscillator.stop(stopAt);
+  if (kind === 'modulatedTone') {
+    modulation.start(startAt);
+    modulation.stop(stopAt);
   }
 
   const cancelLevelLoop = startLevelLoop(analyser, setOutputLevel);
-  const stopTimer = window.setTimeout(onEnded, durationMs);
+  const stopTimer = window.setTimeout(
+    onEnded,
+    durationMs + SOURCE_START_DELAY_SECONDS * 1000 + 80,
+  );
 
   return {
     context,
@@ -140,50 +158,134 @@ export async function createSpeakerTestOutputGraph({
   };
 }
 
-export async function createAudioBufferOutputGraph({
+export async function createMusicOutputGraph({
   getArrayBuffer,
   onEnded,
   routeStreamToOutput,
   setOutputLevel,
+  startAtSeconds = 0,
 }: {
   getArrayBuffer: () => Promise<ArrayBuffer>;
   onEnded: () => void;
   routeStreamToOutput: (stream: MediaStream) => Promise<void>;
   setOutputLevel: LevelSetter;
+  startAtSeconds?: number;
 }): Promise<ActiveOutputGraph> {
   const context = createAudioContext();
   const audioBuffer = await context.decodeAudioData(await getArrayBuffer());
-  const source = context.createBufferSource();
   const analyser = context.createAnalyser();
   const destination = context.createMediaStreamDestination();
 
-  source.buffer = audioBuffer;
   analyser.fftSize = 1024;
   analyser.smoothingTimeConstant = 0.68;
 
-  source.connect(analyser);
   analyser.connect(destination);
 
   await routeStreamToOutput(destination.stream);
   await context.resume();
+  await warmOutputPipeline();
 
   const cancelLevelLoop = startLevelLoop(analyser, setOutputLevel);
-  source.onended = onEnded;
+  const maxStartOffset = Math.max(audioBuffer.duration - 0.02, 0);
+  let source: AudioBufferSourceNode | null = null;
+  let sourceOffset = clamp(startAtSeconds, 0, maxStartOffset);
+  let sourceStartedAt = context.currentTime;
+  let pausedAt = sourceOffset;
+  let isPlaying = false;
+  let isCancelled = false;
 
-  source.start(context.currentTime + BUFFER_PLAYBACK_START_DELAY_SECONDS);
+  function getCurrentTime() {
+    if (!isPlaying) {
+      return pausedAt;
+    }
+
+    return clamp(
+      sourceOffset + Math.max(0, context.currentTime - sourceStartedAt),
+      0,
+      audioBuffer.duration,
+    );
+  }
+
+  function disconnectSource() {
+    const activeSource = source;
+
+    source = null;
+
+    if (!activeSource) {
+      return;
+    }
+
+    activeSource.onended = null;
+
+    try {
+      activeSource.stop();
+    } catch {
+      // Buffer source may already be stopped by playback end.
+    }
+
+    activeSource.disconnect();
+  }
+
+  function playFrom(offsetSeconds: number) {
+    if (isCancelled) {
+      return;
+    }
+
+    disconnectSource();
+
+    const nextSource = context.createBufferSource();
+
+    sourceOffset = clamp(offsetSeconds, 0, maxStartOffset);
+    pausedAt = sourceOffset;
+    source = nextSource;
+    nextSource.buffer = audioBuffer;
+    nextSource.connect(analyser);
+
+    const startAt = context.currentTime + SOURCE_START_DELAY_SECONDS;
+
+    sourceStartedAt = startAt;
+    isPlaying = true;
+
+    nextSource.onended = () => {
+      if (isCancelled || source !== nextSource) {
+        return;
+      }
+
+      source = null;
+      isPlaying = false;
+      pausedAt = 0;
+      nextSource.disconnect();
+      onEnded();
+    };
+
+    nextSource.start(startAt, sourceOffset);
+  }
+
+  function pause() {
+    if (!isPlaying) {
+      return;
+    }
+
+    pausedAt = getCurrentTime();
+    isPlaying = false;
+    disconnectSource();
+    setOutputLevel(0);
+  }
+
+  playFrom(startAtSeconds);
 
   return {
     context,
+    durationSeconds: audioBuffer.duration,
+    getCurrentTime,
+    isPaused: () => !isPlaying,
     mode: 'speakerTest',
+    pause,
+    playFrom,
     cancel: () => {
+      isCancelled = true;
       cancelLevelLoop();
-      source.onended = null;
-      try {
-        source.stop();
-      } catch {
-        // Buffer source may already be stopped by playback end.
-      }
-      source.disconnect();
+      disconnectSource();
       analyser.disconnect();
     },
   };
@@ -260,11 +362,12 @@ export async function createClipOutputGraph({
 
   await routeStreamToOutput(destination.stream);
   await context.resume();
+  await warmOutputPipeline();
 
   const cancelLevelLoop = startLevelLoop(analyser, setOutputLevel);
   source.onended = onEnded;
 
-  source.start();
+  source.start(context.currentTime + SOURCE_START_DELAY_SECONDS);
 
   return {
     context,
@@ -283,17 +386,27 @@ export async function createClipOutputGraph({
   };
 }
 
+async function warmOutputPipeline() {
+  await new Promise<void>((resolve) => {
+    window.setTimeout(resolve, OUTPUT_PIPELINE_WARMUP_MS);
+  });
+}
+
 export function startLevelLoop(analyser: AnalyserNode, setLevel: LevelSetter) {
   const buffer = new Uint8Array(analyser.fftSize);
   let frame = 0;
-  let smoothedLevel = 0;
+  let lastUpdateAt = 0;
 
   const tick = () => {
     analyser.getByteTimeDomainData(buffer);
     const nextLevel = getSignalLevel(buffer);
+    const now = performance.now();
 
-    smoothedLevel = smoothedLevel * 0.78 + nextLevel * 0.22;
-    setLevel(smoothedLevel);
+    if (now - lastUpdateAt >= 32) {
+      lastUpdateAt = now;
+      setLevel(nextLevel);
+    }
+
     frame = window.requestAnimationFrame(tick);
   };
 
