@@ -1,67 +1,84 @@
+import {
+  useRef,
+  type ChangeEvent,
+  type ComponentType,
+  type ReactNode,
+  type SVGProps,
+} from 'react';
 import type { SoundCheckController } from '@/utils/useSoundCheck';
 import { getDeviceLabel } from '@/utils/devices';
-import { MAX_MONITOR_DELAY_MS } from '@/utils/types';
-import { formatSeconds, joinClasses } from '@/utils/utils';
 import {
-  Button,
-  DeviceSummary,
-  Field,
-  LevelMeter,
-  OutputReadout,
-  Panel,
-  StatusPill,
-  Toggle,
-} from './ui';
+  MAX_MONITOR_DELAY_MS,
+  type AudioDevice,
+  type SectionSignalState,
+  type SpeakerTestKind,
+} from '@/utils/types';
+import { formatSeconds, joinClasses } from '@/utils/utils';
+import { DebugModal } from './DebugModal';
+import { Button, Field, LevelMeter, Panel } from './ui';
 
 type SoundCheckProps = {
   soundCheck: SoundCheckController;
 };
 
-export function AppHeader({ soundCheck }: SoundCheckProps) {
+type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
+
+const speakerTestOptions: { kind: SpeakerTestKind; label: string }[] = [
+  { kind: 'tone', label: 'Steady tone' },
+  { kind: 'modulatedTone', label: 'Modulating tone' },
+  { kind: 'sweep', label: 'Frequency sweep' },
+  { kind: 'builtInMusic', label: 'Built-in music' },
+  { kind: 'fileMusic', label: 'Music file' },
+];
+
+export function SiteHeader({ soundCheck }: SoundCheckProps) {
   return (
-    <header className="border-line flex flex-col gap-4 border-b pb-5 md:flex-row md:items-end md:justify-between">
-      <div className="max-w-3xl">
-        <p className="text-control text-sm font-semibold">Sound Check</p>
-        <h1 className="font-headline text-foreground mt-1 text-3xl font-semibold sm:text-4xl">
-          Audio device test bench
-        </h1>
-        <p className="text-muted mt-2 text-sm leading-6">
-          Choose each side of the audio path, test raw microphone capture, route
-          playback to the selected speaker, and stop everything instantly when
-          needed.
-        </p>
+    <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-wrap items-center gap-2">
+        <SiteStatus
+          label="App"
+          value={soundCheck.appPaused ? 'Paused' : 'Running'}
+          tone={soundCheck.appPaused ? 'warn' : 'good'}
+        />
+        <SiteStatus
+          label="Mic"
+          value={getMicHeaderStatus(soundCheck)}
+          tone={getMicHeaderTone(soundCheck)}
+        />
+        <SiteStatus
+          label="Speaker"
+          value={getSpeakerHeaderStatus(soundCheck)}
+          tone={getSpeakerHeaderTone(soundCheck)}
+        />
+        <SiteStatus
+          label="Last event"
+          value={soundCheck.errorMessage || soundCheck.statusMessage}
+          tone={soundCheck.errorMessage ? 'danger' : 'idle'}
+          wide
+        />
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <StatusPill tone={soundCheck.appPaused ? 'warn' : 'good'}>
-          {soundCheck.appPaused ? 'Paused' : 'Active'}
-        </StatusPill>
-        <StatusPill
-          tone={
-            soundCheck.permissionState === 'granted' && !soundCheck.appPaused
-              ? 'good'
-              : 'idle'
-          }
-        >
-          {soundCheck.appPaused
-            ? 'Input stopped'
-            : soundCheck.permissionState === 'granted'
-              ? 'Mic enabled'
-              : 'Mic locked'}
-        </StatusPill>
-        <StatusPill tone={soundCheck.canRouteOutput ? 'good' : 'warn'}>
-          {soundCheck.canRouteOutput
-            ? 'Output routing ready'
-            : 'Default output only'}
-        </StatusPill>
-        <Button
-          variant={soundCheck.appPaused ? 'primary' : 'secondary'}
+      <div className="flex shrink-0 items-center gap-2">
+        <DebugModal soundCheck={soundCheck} />
+        <button
+          type="button"
           onClick={
             soundCheck.appPaused ? soundCheck.resumeApp : soundCheck.pauseApp
           }
+          className={joinClasses(
+            'inline-flex h-10 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-semibold transition focus:ring-4 focus:outline-none',
+            soundCheck.appPaused
+              ? 'border-control bg-control text-on-control hover:bg-control-hover focus:ring-control-soft'
+              : 'border-danger/30 bg-danger-soft text-danger hover:border-danger/45 hover:bg-danger-soft/80 focus:ring-danger-soft',
+          )}
         >
-          {soundCheck.appPaused ? 'Resume app' : 'Pause app'}
-        </Button>
+          {soundCheck.appPaused ? (
+            <PlayIcon aria-hidden="true" className="h-4 w-4" />
+          ) : (
+            <PauseIcon aria-hidden="true" className="h-4 w-4" />
+          )}
+          {soundCheck.appPaused ? 'Resume all' : 'Pause all'}
+        </button>
       </div>
     </header>
   );
@@ -78,338 +95,418 @@ export function UnsupportedPanel() {
   );
 }
 
-export function InputLane({ soundCheck }: SoundCheckProps) {
+export function InputSection({ soundCheck }: SoundCheckProps) {
   return (
-    <section className="border-line bg-panel overflow-hidden rounded-lg border shadow-sm">
-      <LaneHeader
+    <SectionShell muted={soundCheck.inputMuted}>
+      <SectionHeader
         accent="input"
-        label="Input"
-        title="Microphone"
-        statusLabel={soundCheck.inputStatus.shortLabel}
+        devices={soundCheck.inputDevices}
+        deviceKind="audioinput"
+        emptyLabel="No microphone detected"
+        icon={MicrophoneIcon}
+        muted={soundCheck.inputMuted}
+        onDeviceChange={soundCheck.handleInputChange}
+        onRefresh={soundCheck.refreshDevices}
+        onToggleMute={soundCheck.toggleInputMute}
+        selectedDeviceId={soundCheck.selectedInputId}
+        selectedDeviceName={soundCheck.selectedInputName}
+        selectLabel="Microphone device"
+        signalState={soundCheck.inputSignalState}
+        toggleLabel={
+          soundCheck.inputMuted ? 'Unmute microphone' : 'Mute microphone'
+        }
       />
+      <LevelMeter accent="input" level={soundCheck.inputLevel} />
 
-      <div className="grid gap-5 p-4 sm:p-5">
-        <section className="grid gap-4">
-          <Field label="Source">
-            <select
-              id="input-device"
-              name="input-device"
-              value={soundCheck.selectedInputId}
-              onChange={soundCheck.handleInputChange}
-              className="border-line bg-panel text-foreground focus:border-control focus:ring-control-soft h-11 w-full rounded-lg border px-3 text-sm transition outline-none focus:ring-4"
-            >
-              {soundCheck.inputDevices.length === 0 ? (
-                <option value="">No microphone detected</option>
-              ) : (
-                soundCheck.inputDevices.map((device, index) => (
-                  <option
-                    key={`${device.deviceId}-${index}`}
-                    value={device.deviceId}
-                  >
-                    {getDeviceLabel(
-                      device,
-                      soundCheck.inputDevices,
-                      'audioinput',
-                    )}
-                  </option>
-                ))
-              )}
-            </select>
-          </Field>
-
-          <div className="flex flex-wrap gap-2">
-            <Button
-              disabled={soundCheck.appPaused}
-              onClick={soundCheck.requestMicrophoneAccess}
-            >
-              Enable microphone
-            </Button>
-            <Button variant="secondary" onClick={soundCheck.refreshDevices}>
-              Refresh devices
-            </Button>
-          </div>
-
-          <DeviceSummary
-            label="Selected input"
-            value={soundCheck.selectedInputName}
-          />
-        </section>
-
-        <SignalMeter
-          label="Input level"
-          level={soundCheck.inputLevel}
-          statusText={soundCheck.inputStatus.label}
-          statusTone={soundCheck.inputStatus.tone}
-        />
-
+      <div className="grid gap-4 p-4 sm:p-5">
         <ProcessingBlock soundCheck={soundCheck} />
-
-        <section className="grid gap-4">
-          <h2 className="text-foreground text-sm font-semibold">
-            Live monitor
-          </h2>
-          <Field label={`Delay: ${soundCheck.monitorDelayMs} ms`}>
-            <input
-              id="monitor-delay"
-              name="monitor-delay"
-              type="range"
-              min={0}
-              max={MAX_MONITOR_DELAY_MS}
-              step={100}
-              value={soundCheck.monitorDelayMs}
-              onChange={(event) =>
-                soundCheck.handleDelayChange(Number(event.target.value))
-              }
-              className="accent-control h-11 w-full"
-            />
-          </Field>
-          <div className="grid grid-cols-[1fr_auto] gap-2">
-            <input
-              id="monitor-delay-ms"
-              name="monitor-delay-ms"
-              aria-label="Monitor delay in milliseconds"
-              type="number"
-              min={0}
-              max={MAX_MONITOR_DELAY_MS}
-              step={100}
-              value={soundCheck.monitorDelayMs}
-              onChange={(event) =>
-                soundCheck.handleDelayChange(Number(event.target.value))
-              }
-              className="border-line bg-panel text-foreground focus:border-control focus:ring-control-soft h-11 rounded-lg border px-3 font-mono text-sm transition outline-none focus:ring-4"
-            />
-            <span className="border-line bg-panel-soft text-muted flex h-11 items-center rounded-lg border px-3 text-sm">
-              ms
-            </span>
-          </div>
-          {soundCheck.monitorEnabled ? (
-            <Button variant="secondary" onClick={soundCheck.stopMonitor}>
-              Stop monitor
-            </Button>
-          ) : (
-            <Button
-              disabled={soundCheck.appPaused}
-              onClick={soundCheck.startMonitor}
-            >
-              Start monitor
-            </Button>
-          )}
-        </section>
-
+        <LiveMonitorBlock soundCheck={soundCheck} />
         <RecordingCapture soundCheck={soundCheck} />
       </div>
-    </section>
+    </SectionShell>
   );
 }
 
-export function OutputLane({ soundCheck }: SoundCheckProps) {
+export function OutputSection({ soundCheck }: SoundCheckProps) {
+  const musicFileInputRef = useRef<HTMLInputElement | null>(null);
+  const testKind = soundCheck.speakerTestSettings.kind;
+  const needsFrequency = usesToneFrequency(testKind);
+  const needsFile = testKind === 'fileMusic';
+  const isSpeakerTestActive = soundCheck.routedMode === 'speakerTest';
+  const isOutputBusy =
+    soundCheck.routedMode !== 'idle' && soundCheck.routedMode !== 'speakerTest';
+
+  function handleSpeakerTestKindChange(event: ChangeEvent<HTMLSelectElement>) {
+    const nextKind = event.target.value as SpeakerTestKind;
+
+    soundCheck.handleSpeakerTestKindChange(nextKind);
+
+    if (nextKind === 'fileMusic') {
+      window.setTimeout(() => musicFileInputRef.current?.click(), 0);
+    }
+  }
+
   return (
-    <section className="border-line bg-panel overflow-hidden rounded-lg border shadow-sm">
-      <LaneHeader
+    <SectionShell muted={soundCheck.outputMuted}>
+      <SectionHeader
         accent="output"
-        label="Output"
-        title="Speaker"
-        statusLabel={soundCheck.outputStatus.shortLabel}
+        devices={soundCheck.outputDevices}
+        deviceKind="audiooutput"
+        disabled={!soundCheck.canRouteOutput}
+        emptyLabel="No speaker detected"
+        icon={SpeakerIcon}
+        muted={soundCheck.outputMuted}
+        onDeviceChange={soundCheck.handleOutputChange}
+        onRefresh={soundCheck.refreshDevices}
+        onToggleMute={soundCheck.toggleOutputMute}
+        selectedDeviceId={soundCheck.selectedOutputId}
+        selectedDeviceName={soundCheck.selectedOutputName}
+        selectLabel="Speaker device"
+        signalState={soundCheck.outputSignalState}
+        toggleLabel={soundCheck.outputMuted ? 'Unmute speaker' : 'Mute speaker'}
       />
+      <LevelMeter accent="output" level={soundCheck.outputLevel} />
 
-      <div className="grid gap-5 p-4 sm:p-5">
-        <section className="grid gap-4">
-          <Field label="Destination">
-            <select
-              id="output-device"
-              name="output-device"
-              value={soundCheck.selectedOutputId}
-              onChange={soundCheck.handleOutputChange}
-              disabled={!soundCheck.canRouteOutput}
-              className="border-line bg-panel text-foreground focus:border-control focus:ring-control-soft disabled:bg-panel-soft disabled:text-muted h-11 w-full rounded-lg border px-3 text-sm transition outline-none focus:ring-4"
-            >
-              {soundCheck.outputDevices.map((device, index) => (
-                <option
-                  key={`${device.deviceId}-${index}`}
-                  value={device.deviceId}
-                >
-                  {getDeviceLabel(
-                    device,
-                    soundCheck.outputDevices,
-                    'audiooutput',
-                  )}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <div className="flex flex-wrap gap-2">
-            {soundCheck.canRequestOutput ? (
-              <Button
-                variant="secondary"
-                onClick={soundCheck.requestOutputAccess}
-              >
-                Choose speaker
-              </Button>
-            ) : null}
-            <Button variant="secondary" onClick={soundCheck.refreshDevices}>
-              Refresh devices
-            </Button>
-          </div>
-
-          <DeviceSummary
-            label="Selected output"
-            value={soundCheck.selectedOutputName}
-          />
-        </section>
-
-        <OutputReadout
-          outputStatus={soundCheck.outputStatus}
-          level={soundCheck.outputLevel}
-        />
-
-        <section className="grid gap-4">
-          <div>
-            <h2 className="text-foreground text-sm font-semibold">
-              Speaker test
-            </h2>
-            <p className="text-muted mt-1 text-xs leading-5">
-              Plays a fixed 440 Hz tone through the selected output.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
+      <div className="grid gap-4 p-4 sm:p-5">
+        {soundCheck.canRequestOutput ? (
+          <SettingsGroup
+            title="Output access"
+            description="Ask the browser for additional speaker choices when it supports explicit output selection."
+          >
             <Button
-              onClick={soundCheck.startToneTest}
-              disabled={
-                soundCheck.appPaused ||
-                (soundCheck.routedMode !== 'idle' &&
-                  soundCheck.routedMode !== 'tone')
-              }
+              variant="secondary"
+              onClick={soundCheck.requestOutputAccess}
             >
-              Play test sound
+              Choose speaker
             </Button>
-            {soundCheck.routedMode === 'tone' && !soundCheck.appPaused ? (
-              <Button variant="secondary" onClick={soundCheck.stopOutputGraph}>
-                Stop
-              </Button>
+          </SettingsGroup>
+        ) : null}
+
+        <SettingsGroup
+          title="Speaker test"
+          description="Generated tones are routed directly to the selected output. Music playback is decoded only when you play it."
+        >
+          <div className="grid gap-4">
+            <Field label="Sound">
+              <select
+                id="speaker-test-kind"
+                name="speaker-test-kind"
+                value={testKind}
+                onChange={handleSpeakerTestKindChange}
+                className="border-line bg-panel text-foreground focus:border-control focus:ring-control-soft h-11 w-full rounded-lg border px-3 text-sm transition outline-none focus:ring-4"
+              >
+                {speakerTestOptions.map((option) => (
+                  <option key={option.kind} value={option.kind}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            {needsFrequency ? (
+              <div className="grid gap-2">
+                <Field
+                  label={`Tone frequency: ${soundCheck.speakerTestSettings.toneFrequency} Hz`}
+                >
+                  <input
+                    id="speaker-test-frequency"
+                    name="speaker-test-frequency"
+                    type="range"
+                    min={40}
+                    max={12000}
+                    step={10}
+                    value={soundCheck.speakerTestSettings.toneFrequency}
+                    onChange={(event) =>
+                      soundCheck.handleSpeakerToneFrequencyChange(
+                        Number(event.target.value),
+                      )
+                    }
+                    className="accent-control h-11 w-full"
+                  />
+                </Field>
+                <div className="grid grid-cols-[1fr_auto] gap-2">
+                  <input
+                    aria-label="Tone frequency in hertz"
+                    type="number"
+                    min={40}
+                    max={12000}
+                    step={10}
+                    value={soundCheck.speakerTestSettings.toneFrequency}
+                    onChange={(event) =>
+                      soundCheck.handleSpeakerToneFrequencyChange(
+                        Number(event.target.value),
+                      )
+                    }
+                    className="border-line bg-panel text-foreground focus:border-control focus:ring-control-soft h-11 rounded-lg border px-3 font-mono text-sm transition outline-none focus:ring-4"
+                  />
+                  <span className="border-line bg-panel-soft text-muted flex h-11 items-center rounded-lg border px-3 text-sm">
+                    Hz
+                  </span>
+                </div>
+              </div>
             ) : null}
+
+            <input
+              ref={musicFileInputRef}
+              type="file"
+              accept="audio/*"
+              className="hidden"
+              onChange={(event) =>
+                soundCheck.handleSpeakerMusicFileChange(
+                  event.target.files?.item(0) ?? null,
+                )
+              }
+            />
+
+            {needsFile ? (
+              <div className="border-line bg-panel flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-foreground truncate text-sm font-semibold">
+                  {soundCheck.speakerTestSettings.musicFile?.name ??
+                    'No file selected'}
+                </p>
+                <Button
+                  variant="secondary"
+                  onClick={() => musicFileInputRef.current?.click()}
+                >
+                  Choose file
+                </Button>
+              </div>
+            ) : null}
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={soundCheck.startSpeakerTest}
+                disabled={
+                  soundCheck.appPaused ||
+                  soundCheck.outputMuted ||
+                  isOutputBusy ||
+                  (needsFile && !soundCheck.speakerTestSettings.musicFile)
+                }
+              >
+                Play test sound
+              </Button>
+              {isSpeakerTestActive && !soundCheck.appPaused ? (
+                <Button
+                  variant="secondary"
+                  onClick={soundCheck.stopOutputGraph}
+                >
+                  Stop
+                </Button>
+              ) : null}
+            </div>
           </div>
-        </section>
+        </SettingsGroup>
 
         <RecordingPlayback soundCheck={soundCheck} />
       </div>
-    </section>
+    </SectionShell>
   );
 }
 
-export function SessionStatusPanel({ soundCheck }: SoundCheckProps) {
+function SectionShell({
+  children,
+  muted,
+}: {
+  children: ReactNode;
+  muted: boolean;
+}) {
   return (
-    <section className="border-line bg-panel rounded-lg border px-4 py-3 shadow-sm">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-foreground text-sm font-semibold">
-            Session status
-          </p>
-          <p className="text-muted mt-1 text-sm">{soundCheck.statusMessage}</p>
-        </div>
-        <StatusPill tone={soundCheck.errorMessage ? 'danger' : 'good'}>
-          {soundCheck.errorMessage ? 'Needs attention' : 'Ready'}
-        </StatusPill>
-      </div>
-      {soundCheck.errorMessage ? (
-        <p className="border-danger/30 bg-danger-soft text-danger mt-3 rounded-lg border px-3 py-2 text-sm">
-          {soundCheck.errorMessage}
-        </p>
+    <section className="border-line bg-panel relative overflow-hidden rounded-lg border shadow-sm">
+      {children}
+      {muted ? (
+        <div className="pointer-events-none absolute inset-0 z-20 bg-slate-200/35 backdrop-grayscale" />
       ) : null}
     </section>
   );
 }
 
-function LaneHeader({
+function SectionHeader({
   accent,
-  label,
-  statusLabel,
-  title,
+  devices,
+  deviceKind,
+  disabled,
+  emptyLabel,
+  icon: Icon,
+  muted,
+  onDeviceChange,
+  onRefresh,
+  onToggleMute,
+  selectedDeviceId,
+  selectedDeviceName,
+  selectLabel,
+  signalState,
+  toggleLabel,
 }: {
   accent: 'input' | 'output';
-  label: string;
-  statusLabel: string;
-  title: string;
+  devices: AudioDevice[];
+  deviceKind: 'audioinput' | 'audiooutput';
+  disabled?: boolean;
+  emptyLabel: string;
+  icon: IconComponent;
+  muted: boolean;
+  onDeviceChange: (event: ChangeEvent<HTMLSelectElement>) => void;
+  onRefresh: () => void;
+  onToggleMute: () => void;
+  selectedDeviceId: string;
+  selectedDeviceName: string;
+  selectLabel: string;
+  signalState: SectionSignalState;
+  toggleLabel: string;
 }) {
+  const canChangeDevice = !disabled && devices.length > 0;
+  const visibleDeviceName = selectedDeviceName || emptyLabel;
+
   return (
     <div
       className={joinClasses(
-        'border-line flex items-center justify-between gap-4 border-b px-4 py-4 sm:px-5',
+        'border-line grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-4 border-b px-4 py-4 sm:px-5',
         accent === 'input' && 'bg-input-soft',
         accent === 'output' && 'bg-output-soft',
       )}
     >
-      <div className="flex items-center gap-3">
+      <button
+        type="button"
+        aria-label={toggleLabel}
+        title={toggleLabel}
+        onClick={onToggleMute}
+        className={joinClasses(
+          'flex h-11 w-11 shrink-0 items-center justify-center rounded-full border text-white transition focus:ring-4 focus:outline-none',
+          muted
+            ? 'border-line bg-muted/55 focus:ring-panel-strong'
+            : accent === 'input'
+              ? 'border-input bg-input hover:bg-input/90 focus:ring-input-soft'
+              : 'border-output bg-output hover:bg-output/90 focus:ring-output-soft',
+        )}
+      >
+        <Icon aria-hidden="true" className="h-5 w-5" />
+      </button>
+
+      <label className="focus-within:ring-control-soft relative inline-flex max-w-full min-w-44 items-center justify-self-start rounded-md py-1 pr-7 text-left transition focus-within:ring-4">
+        <span className="sr-only">{selectLabel}</span>
         <span
-          className={joinClasses(
-            'flex h-11 w-11 items-center justify-center rounded-full font-mono text-sm font-semibold text-white',
-            accent === 'input' && 'bg-input',
-            accent === 'output' && 'bg-output',
-          )}
+          className="font-headline text-foreground min-w-0 truncate text-lg leading-tight font-semibold sm:text-xl"
+          title={visibleDeviceName}
         >
-          {accent === 'input' ? 'IN' : 'OUT'}
+          {visibleDeviceName}
         </span>
-        <div>
-          <p
-            className={joinClasses(
-              'text-xs font-semibold uppercase',
-              accent === 'input' && 'text-input',
-              accent === 'output' && 'text-output',
-            )}
-          >
-            {label}
-          </p>
-          <h2 className="font-headline text-foreground text-xl font-semibold">
-            {title}
-          </h2>
-        </div>
-      </div>
-      <span className="border-line bg-panel/80 text-muted rounded-full border px-3 py-1 text-xs font-semibold">
-        {statusLabel}
-      </span>
+        {canChangeDevice ? (
+          <ChevronDownIcon
+            aria-hidden="true"
+            className="text-muted pointer-events-none ml-1.5 h-4 w-4 shrink-0"
+          />
+        ) : null}
+        <select
+          aria-label={selectLabel}
+          disabled={!canChangeDevice}
+          title={visibleDeviceName}
+          value={selectedDeviceId}
+          onChange={onDeviceChange}
+          className="absolute inset-0 h-full w-full cursor-pointer appearance-none opacity-0 disabled:cursor-not-allowed"
+        >
+          {devices.length === 0 ? (
+            <option value="">{emptyLabel}</option>
+          ) : (
+            devices.map((device, index) => (
+              <option
+                key={`${device.deviceId}-${index}`}
+                value={device.deviceId}
+              >
+                {getDeviceLabel(device, devices, deviceKind)}
+              </option>
+            ))
+          )}
+        </select>
+      </label>
+
+      <IconButton
+        label="Refresh devices"
+        onClick={onRefresh}
+        icon={RefreshIcon}
+      />
+      <SignalDot state={signalState} />
     </div>
   );
 }
 
-function SignalMeter({
+function SiteStatus({
   label,
-  level,
-  statusText,
-  statusTone,
+  tone,
+  value,
+  wide,
 }: {
   label: string;
-  level: number;
-  statusText: string;
-  statusTone: SoundCheckController['inputStatus']['tone'];
+  tone: 'danger' | 'good' | 'idle' | 'warn';
+  value: string;
+  wide?: boolean;
 }) {
   return (
-    <section className="border-line bg-panel-soft rounded-lg border p-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-foreground text-sm font-semibold">{label}</h2>
-          <p className="text-muted mt-1 text-xs">{statusText}</p>
-        </div>
-        <StatusPill tone={statusTone}>
-          {level > 0 ? `${Math.round(level * 100)}%` : 'Idle'}
-        </StatusPill>
-      </div>
-      <LevelMeter className="mt-4" level={level} />
-    </section>
+    <span
+      className={joinClasses(
+        'inline-flex h-10 min-w-0 items-center gap-2 rounded-lg border px-3 text-xs',
+        wide ? 'max-w-full sm:max-w-md' : 'max-w-48',
+        tone === 'good' && 'border-signal/30 bg-signal-soft text-signal',
+        tone === 'warn' && 'border-warning/30 bg-warning-soft text-warning',
+        tone === 'danger' && 'border-danger/30 bg-danger-soft text-danger',
+        tone === 'idle' && 'border-line bg-panel text-muted',
+      )}
+    >
+      <span
+        className={joinClasses(
+          'h-2 w-2 shrink-0 rounded-full',
+          tone === 'good' && 'bg-signal',
+          tone === 'warn' && 'bg-warning',
+          tone === 'danger' && 'bg-danger',
+          tone === 'idle' && 'bg-status-ready',
+        )}
+      />
+      <span className="shrink-0 font-semibold">{label}</span>
+      <span className="min-w-0 truncate">{value}</span>
+    </span>
+  );
+}
+
+function SignalDot({ state }: { state: SectionSignalState }) {
+  const label =
+    state === 'off' ? 'Off' : state === 'ready' ? 'Ready' : 'Signal detected';
+
+  return (
+    <span
+      aria-label={label}
+      title={label}
+      className={joinClasses(
+        'h-3.5 w-3.5 rounded-full border',
+        state === 'off' && 'border-line bg-muted/35',
+        state === 'ready' && 'border-status-ready bg-status-ready',
+        state === 'active' &&
+          'border-status-active bg-status-active shadow-[0_0_0_5px_rgba(36,100,194,0.22)]',
+      )}
+    />
   );
 }
 
 function ProcessingBlock({ soundCheck }: SoundCheckProps) {
   return (
-    <section className="grid gap-3">
-      <Toggle
-        checked={soundCheck.processingEnabled}
-        description="Browser capture processing. Off gives the raw microphone stream for monitoring and recording."
-        id="processing-enabled"
-        label="Enable processing"
-        onChange={soundCheck.handleProcessingEnabledChange}
-      />
+    <SettingsGroup
+      title="Capture processing"
+      description="Off gives the raw microphone stream for monitoring and recording. Enable these browser controls only when you want the call-style processed signal."
+    >
+      <label className="flex cursor-pointer items-center justify-between gap-4">
+        <span className="text-foreground text-sm font-semibold">
+          Enable processing
+        </span>
+        <input
+          id="processing-enabled"
+          name="processing-enabled"
+          type="checkbox"
+          checked={soundCheck.processingEnabled}
+          onChange={(event) =>
+            soundCheck.handleProcessingEnabledChange(event.target.checked)
+          }
+          className="accent-control h-5 w-5 shrink-0"
+        />
+      </label>
 
-      <div className="grid gap-2">
+      <div className="border-line mt-3 grid gap-3 border-t pt-3">
         <ProcessingOption
           checked={soundCheck.processingSettings.echoCancellation}
           disabled={!soundCheck.processingEnabled}
@@ -444,7 +541,7 @@ function ProcessingBlock({ soundCheck }: SoundCheckProps) {
           }
         />
       </div>
-    </section>
+    </SettingsGroup>
   );
 }
 
@@ -462,7 +559,7 @@ function ProcessingOption({
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <label className="border-line bg-panel-soft flex items-start gap-3 rounded-lg border px-3 py-2">
+    <label className="grid grid-cols-[auto_minmax(0,1fr)] gap-3">
       <input
         type="checkbox"
         checked={checked}
@@ -482,65 +579,111 @@ function ProcessingOption({
   );
 }
 
+function LiveMonitorBlock({ soundCheck }: SoundCheckProps) {
+  return (
+    <SettingsGroup title="Live monitor">
+      <div className="grid gap-4">
+        <Field label={`Delay: ${soundCheck.monitorDelayMs} ms`}>
+          <input
+            id="monitor-delay"
+            name="monitor-delay"
+            type="range"
+            min={0}
+            max={MAX_MONITOR_DELAY_MS}
+            step={100}
+            value={soundCheck.monitorDelayMs}
+            onChange={(event) =>
+              soundCheck.handleDelayChange(Number(event.target.value))
+            }
+            className="accent-control h-11 w-full"
+          />
+        </Field>
+        <div className="grid grid-cols-[1fr_auto] gap-2">
+          <input
+            id="monitor-delay-ms"
+            name="monitor-delay-ms"
+            aria-label="Monitor delay in milliseconds"
+            type="number"
+            min={0}
+            max={MAX_MONITOR_DELAY_MS}
+            step={100}
+            value={soundCheck.monitorDelayMs}
+            onChange={(event) =>
+              soundCheck.handleDelayChange(Number(event.target.value))
+            }
+            className="border-line bg-panel text-foreground focus:border-control focus:ring-control-soft h-11 rounded-lg border px-3 font-mono text-sm transition outline-none focus:ring-4"
+          />
+          <span className="border-line bg-panel text-muted flex h-11 items-center rounded-lg border px-3 text-sm">
+            ms
+          </span>
+        </div>
+        {soundCheck.monitorEnabled ? (
+          <Button variant="secondary" onClick={soundCheck.stopMonitor}>
+            Stop monitor
+          </Button>
+        ) : (
+          <Button
+            disabled={
+              soundCheck.appPaused ||
+              soundCheck.inputMuted ||
+              soundCheck.outputMuted
+            }
+            onClick={soundCheck.startMonitor}
+          >
+            Start monitor
+          </Button>
+        )}
+      </div>
+    </SettingsGroup>
+  );
+}
+
 function RecordingCapture({ soundCheck }: SoundCheckProps) {
   return (
-    <section className="border-line bg-panel-soft rounded-lg border p-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-foreground text-sm font-semibold">
-            Record input
-          </h2>
-          <p className="text-muted mt-1 font-mono text-xs">
-            {soundCheck.isRecording
-              ? formatSeconds(soundCheck.recordingSeconds)
-              : soundCheck.recordedClip
-                ? formatSeconds(soundCheck.recordedClip.durationSeconds)
-                : '00:00.0'}
-          </p>
-        </div>
-        <StatusPill tone={soundCheck.isRecording ? 'danger' : 'idle'}>
-          {soundCheck.isRecording ? 'Recording' : 'Ready'}
-        </StatusPill>
-      </div>
+    <SettingsGroup title="Record input">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-muted font-mono text-xs">
+          {soundCheck.isRecording
+            ? formatSeconds(soundCheck.recordingSeconds)
+            : soundCheck.recordedClip
+              ? formatSeconds(soundCheck.recordedClip.durationSeconds)
+              : '00:00.0'}
+        </p>
 
-      <div className="mt-4">
         {soundCheck.isRecording ? (
           <Button variant="danger" onClick={soundCheck.stopRecording}>
             Stop recording
           </Button>
         ) : (
           <Button
-            disabled={soundCheck.appPaused}
+            disabled={soundCheck.appPaused || soundCheck.inputMuted}
             onClick={soundCheck.startRecording}
           >
             Record input
           </Button>
         )}
       </div>
-    </section>
+    </SettingsGroup>
   );
 }
 
 function RecordingPlayback({ soundCheck }: SoundCheckProps) {
   return (
-    <section className="border-line bg-panel-soft rounded-lg border p-4">
-      <div>
-        <h2 className="text-foreground text-sm font-semibold">
-          Recorded playback
-        </h2>
-        <p className="text-muted mt-1 text-xs leading-5">
-          {soundCheck.recordedClip
-            ? `${soundCheck.recordedClip.mimeType || 'audio'} clip ready.`
-            : 'No clip recorded.'}
-        </p>
-      </div>
-
-      <div className="mt-4 flex flex-wrap gap-2">
+    <SettingsGroup
+      title="Recorded playback"
+      description={
+        soundCheck.recordedClip
+          ? `${soundCheck.recordedClip.mimeType || 'audio'} clip ready.`
+          : 'No clip recorded.'
+      }
+    >
+      <div className="flex flex-wrap gap-2">
         <Button
           variant="secondary"
           onClick={soundCheck.playRecordedClip}
           disabled={
             soundCheck.appPaused ||
+            soundCheck.outputMuted ||
             !soundCheck.recordedClip ||
             soundCheck.routedMode === 'clip'
           }
@@ -553,6 +696,214 @@ function RecordingPlayback({ soundCheck }: SoundCheckProps) {
           </Button>
         ) : null}
       </div>
+    </SettingsGroup>
+  );
+}
+
+function SettingsGroup({
+  children,
+  description,
+  title,
+}: {
+  children: ReactNode;
+  description?: ReactNode;
+  title: string;
+}) {
+  return (
+    <section className="border-line bg-panel-soft rounded-lg border p-4">
+      <div className="mb-4">
+        <h2 className="text-foreground text-sm font-semibold">{title}</h2>
+        {description ? (
+          <p className="text-muted mt-1 text-xs leading-5">{description}</p>
+        ) : null}
+      </div>
+      {children}
     </section>
+  );
+}
+
+function IconButton({
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  icon: IconComponent;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className="border-line bg-panel/80 text-muted hover:bg-panel hover:text-foreground focus:ring-control-soft flex h-9 w-9 items-center justify-center rounded-lg border transition focus:ring-4 focus:outline-none"
+    >
+      <Icon aria-hidden="true" className="h-4 w-4" />
+    </button>
+  );
+}
+
+function usesToneFrequency(kind: SpeakerTestKind) {
+  return kind === 'tone' || kind === 'modulatedTone' || kind === 'sweep';
+}
+
+function getMicHeaderStatus(soundCheck: SoundCheckController) {
+  if (soundCheck.appPaused) {
+    return 'Paused';
+  }
+
+  if (soundCheck.inputMuted) {
+    return 'Muted';
+  }
+
+  if (soundCheck.permissionState === 'blocked') {
+    return 'Blocked';
+  }
+
+  if (soundCheck.permissionState === 'granted') {
+    return soundCheck.inputSignalState === 'active' ? 'Signal' : 'Ready';
+  }
+
+  return 'Starting';
+}
+
+function getMicHeaderTone(soundCheck: SoundCheckController) {
+  if (soundCheck.inputMuted || soundCheck.appPaused) {
+    return 'warn' as const;
+  }
+
+  if (soundCheck.permissionState === 'blocked') {
+    return 'danger' as const;
+  }
+
+  return soundCheck.permissionState === 'granted'
+    ? ('good' as const)
+    : ('idle' as const);
+}
+
+function getSpeakerHeaderStatus(soundCheck: SoundCheckController) {
+  if (soundCheck.appPaused) {
+    return 'Paused';
+  }
+
+  if (soundCheck.outputMuted) {
+    return 'Muted';
+  }
+
+  if (soundCheck.routedMode !== 'idle') {
+    return 'Playing';
+  }
+
+  return soundCheck.canRouteOutput ? 'Ready' : 'Default only';
+}
+
+function getSpeakerHeaderTone(soundCheck: SoundCheckController) {
+  if (soundCheck.outputMuted || soundCheck.appPaused) {
+    return 'warn' as const;
+  }
+
+  return soundCheck.canRouteOutput ? ('good' as const) : ('idle' as const);
+}
+
+function MicrophoneIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" {...props}>
+      <path
+        d="M12 3.75a3 3 0 0 0-3 3v5a3 3 0 1 0 6 0v-5a3 3 0 0 0-3-3Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+      <path
+        d="M5.75 11.25a6.25 6.25 0 0 0 12.5 0M12 17.5v2.75M8.75 20.25h6.5"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+    </svg>
+  );
+}
+
+function SpeakerIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" {...props}>
+      <path
+        d="M4.75 9.25v5.5h3.1l4.65 3.5V5.75l-4.65 3.5h-3.1Z"
+        stroke="currentColor"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+      <path
+        d="M16 8.5a5.15 5.15 0 0 1 0 7M18.5 6.25a8.4 8.4 0 0 1 0 11.5"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="1.8"
+      />
+    </svg>
+  );
+}
+
+function ChevronDownIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" {...props}>
+      <path
+        d="m5 7.5 5 5 5-5"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+    </svg>
+  );
+}
+
+function RefreshIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" {...props}>
+      <path
+        d="M20 6v5h-5M4 18v-5h5"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+      <path
+        d="M18.1 10A6.5 6.5 0 0 0 6.6 7.2L4 10m1.9 4A6.5 6.5 0 0 0 17.4 16.8L20 14"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+    </svg>
+  );
+}
+
+function PauseIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" {...props}>
+      <path
+        d="M7 4.75v10.5M13 4.75v10.5"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="2"
+      />
+    </svg>
+  );
+}
+
+function PlayIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" {...props}>
+      <path
+        d="M7 4.75v10.5l8-5.25L7 4.75Z"
+        fill="currentColor"
+        stroke="currentColor"
+        strokeLinejoin="round"
+        strokeWidth="1.5"
+      />
+    </svg>
   );
 }

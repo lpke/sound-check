@@ -4,6 +4,7 @@ import type {
   ActiveInputAnalyser,
   ActiveOutputGraph,
   LevelSetter,
+  SpeakerTestKind,
   WindowWithWebkitAudio,
 } from './types';
 
@@ -13,6 +14,7 @@ const preferredMimeTypes = [
   'audio/mp4',
   'audio/ogg;codecs=opus',
 ];
+const BUFFER_PLAYBACK_START_DELAY_SECONDS = 0.14;
 
 export function createAudioContext() {
   const AudioContextConstructor =
@@ -53,30 +55,46 @@ export async function createInputAnalyser(
   };
 }
 
-export async function createToneOutputGraph({
+export async function createSpeakerTestOutputGraph({
+  kind,
   onEnded,
   routeStreamToOutput,
   setOutputLevel,
+  toneFrequency,
 }: {
+  kind: Exclude<SpeakerTestKind, 'builtInMusic' | 'fileMusic'>;
   onEnded: () => void;
   routeStreamToOutput: (stream: MediaStream) => Promise<void>;
   setOutputLevel: LevelSetter;
+  toneFrequency: number;
 }): Promise<ActiveOutputGraph> {
   const context = createAudioContext();
   const oscillator = context.createOscillator();
   const gain = context.createGain();
+  const modulation = context.createOscillator();
+  const modulationGain = context.createGain();
   const analyser = context.createAnalyser();
   const destination = context.createMediaStreamDestination();
   const now = context.currentTime;
+  const durationMs =
+    kind === 'sweep' ? 8000 : kind === 'modulatedTone' ? 6000 : 3000;
+  const frequency = clamp(toneFrequency, 40, 12000);
 
   analyser.fftSize = 1024;
   oscillator.type = 'sine';
-  oscillator.frequency.setValueAtTime(440, now);
+  oscillator.frequency.setValueAtTime(frequency, now);
 
-  for (let offset = 0; offset <= 2.4; offset += 0.4) {
-    oscillator.frequency.setValueAtTime(
-      offset % 0.8 === 0 ? 440 : 660,
-      now + offset,
+  if (kind === 'modulatedTone') {
+    modulation.frequency.setValueAtTime(5, now);
+    modulationGain.gain.setValueAtTime(frequency * 0.06, now);
+    modulation.connect(modulationGain);
+    modulationGain.connect(oscillator.frequency);
+  }
+
+  if (kind === 'sweep') {
+    oscillator.frequency.exponentialRampToValueAtTime(
+      clamp(frequency * 4, 160, 12000),
+      now + durationMs / 1000,
     );
   }
 
@@ -90,13 +108,16 @@ export async function createToneOutputGraph({
   await context.resume();
 
   oscillator.start();
+  if (kind === 'modulatedTone') {
+    modulation.start();
+  }
 
   const cancelLevelLoop = startLevelLoop(analyser, setOutputLevel);
-  const stopTimer = window.setTimeout(onEnded, 3000);
+  const stopTimer = window.setTimeout(onEnded, durationMs);
 
   return {
     context,
-    mode: 'tone',
+    mode: 'speakerTest',
     cancel: () => {
       window.clearTimeout(stopTimer);
       cancelLevelLoop();
@@ -105,8 +126,64 @@ export async function createToneOutputGraph({
       } catch {
         // Oscillator may already be stopped by the scheduled end.
       }
+      try {
+        modulation.stop();
+      } catch {
+        // Modulator may not have been started or may already be stopped.
+      }
       oscillator.disconnect();
       gain.disconnect();
+      modulation.disconnect();
+      modulationGain.disconnect();
+      analyser.disconnect();
+    },
+  };
+}
+
+export async function createAudioBufferOutputGraph({
+  getArrayBuffer,
+  onEnded,
+  routeStreamToOutput,
+  setOutputLevel,
+}: {
+  getArrayBuffer: () => Promise<ArrayBuffer>;
+  onEnded: () => void;
+  routeStreamToOutput: (stream: MediaStream) => Promise<void>;
+  setOutputLevel: LevelSetter;
+}): Promise<ActiveOutputGraph> {
+  const context = createAudioContext();
+  const audioBuffer = await context.decodeAudioData(await getArrayBuffer());
+  const source = context.createBufferSource();
+  const analyser = context.createAnalyser();
+  const destination = context.createMediaStreamDestination();
+
+  source.buffer = audioBuffer;
+  analyser.fftSize = 1024;
+  analyser.smoothingTimeConstant = 0.68;
+
+  source.connect(analyser);
+  analyser.connect(destination);
+
+  await routeStreamToOutput(destination.stream);
+  await context.resume();
+
+  const cancelLevelLoop = startLevelLoop(analyser, setOutputLevel);
+  source.onended = onEnded;
+
+  source.start(context.currentTime + BUFFER_PLAYBACK_START_DELAY_SECONDS);
+
+  return {
+    context,
+    mode: 'speakerTest',
+    cancel: () => {
+      cancelLevelLoop();
+      source.onended = null;
+      try {
+        source.stop();
+      } catch {
+        // Buffer source may already be stopped by playback end.
+      }
+      source.disconnect();
       analyser.disconnect();
     },
   };

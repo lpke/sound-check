@@ -9,10 +9,11 @@ import {
   useState,
 } from 'react';
 import {
+  createAudioBufferOutputGraph,
   createClipOutputGraph,
   createInputAnalyser,
   createMonitorOutputGraph,
-  createToneOutputGraph,
+  createSpeakerTestOutputGraph,
 } from './audio';
 import {
   applySink,
@@ -28,6 +29,7 @@ import { getInputStatus, getOutputStatus } from './status';
 import {
   DEFAULT_OUTPUT_ID,
   MAX_MONITOR_DELAY_MS,
+  SIGNAL_THRESHOLD,
   type ActiveInputAnalyser,
   type ActiveOutputGraph,
   type AudioDevice,
@@ -36,6 +38,9 @@ import {
   type ProcessingSettingKey,
   type ProcessingSettings,
   type RoutedMode,
+  type SectionSignalState,
+  type SpeakerTestKind,
+  type SpeakerTestSettings,
 } from './types';
 import { useRecorder } from './useRecorder';
 import { clamp, toErrorMessage } from './utils';
@@ -44,6 +49,12 @@ const defaultProcessingSettings: ProcessingSettings = {
   autoGainControl: true,
   echoCancellation: true,
   noiseSuppression: true,
+};
+
+const defaultSpeakerTestSettings: SpeakerTestSettings = {
+  kind: 'tone',
+  musicFile: null,
+  toneFrequency: 440,
 };
 
 export function useSoundCheck() {
@@ -64,16 +75,20 @@ export function useSoundCheck() {
   const [selectedInputId, setSelectedInputId] = useState('');
   const [selectedOutputId, setSelectedOutputId] = useState(DEFAULT_OUTPUT_ID);
   const [appPaused, setAppPaused] = useState(false);
+  const [inputMuted, setInputMuted] = useState(false);
+  const [outputMuted, setOutputMuted] = useState(false);
   const [processingEnabled, setProcessingEnabled] = useState(false);
   const [processingSettings, setProcessingSettings] =
     useState<ProcessingSettings>(defaultProcessingSettings);
+  const [speakerTestSettings, setSpeakerTestSettings] =
+    useState<SpeakerTestSettings>(defaultSpeakerTestSettings);
   const [monitorEnabled, setMonitorEnabled] = useState(false);
   const [monitorDelayMs, setMonitorDelayMs] = useState(0);
   const [routedMode, setRoutedMode] = useState<RoutedMode>('idle');
   const [inputLevel, setInputLevel] = useState(0);
   const [outputLevel, setOutputLevel] = useState(0);
   const [statusMessage, setStatusMessage] = useState(
-    'Enable microphone access to reveal device labels.',
+    'Starting microphone when access is available.',
   );
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -103,8 +118,35 @@ export function useSoundCheck() {
         shortLabel: 'Paused',
         tone: 'idle' as const,
       }
-    : getInputStatus(permissionState, inputLevel);
-  const outputStatus = getOutputStatus(routedMode, outputLevel);
+    : inputMuted
+      ? {
+          label: 'Microphone section is muted.',
+          shortLabel: 'Muted',
+          tone: 'idle' as const,
+        }
+      : getInputStatus(permissionState, inputLevel);
+  const outputStatus =
+    appPaused || outputMuted
+      ? {
+          label: appPaused
+            ? 'App is paused. No output is playing.'
+            : 'Speaker section is muted.',
+          shortLabel: appPaused ? 'Paused' : 'Muted',
+          tone: 'idle' as const,
+        }
+      : getOutputStatus(routedMode, outputLevel);
+  const inputSignalState: SectionSignalState =
+    appPaused || inputMuted || permissionState !== 'granted'
+      ? 'off'
+      : inputLevel >= SIGNAL_THRESHOLD
+        ? 'active'
+        : 'ready';
+  const outputSignalState: SectionSignalState =
+    appPaused || outputMuted
+      ? 'off'
+      : outputLevel >= SIGNAL_THRESHOLD
+        ? 'active'
+        : 'ready';
 
   const stopInputAnalyser = useCallback(() => {
     const activeAnalyser = inputAnalyserRef.current;
@@ -193,8 +235,12 @@ export function useSoundCheck() {
 
   const startInputStream = useCallback(
     async (deviceId?: string) => {
-      if (appPaused) {
-        throw new Error('Resume the app before using the microphone.');
+      if (appPaused || inputMuted) {
+        throw new Error(
+          inputMuted
+            ? 'Unmute the microphone section before using input.'
+            : 'Resume the app before using the microphone.',
+        );
       }
 
       if (!navigator.mediaDevices?.getUserMedia) {
@@ -220,6 +266,7 @@ export function useSoundCheck() {
     },
     [
       appPaused,
+      inputMuted,
       processingEnabled,
       processingSettings,
       startInputAnalyser,
@@ -248,18 +295,26 @@ export function useSoundCheck() {
   });
 
   const startRecording = useCallback(() => {
-    if (appPaused) {
-      setStatusMessage('Resume the app before recording input.');
+    if (appPaused || inputMuted) {
+      setStatusMessage(
+        inputMuted
+          ? 'Unmute the microphone section before recording input.'
+          : 'Resume the app before recording input.',
+      );
       return;
     }
 
     void startRecorder();
-  }, [appPaused, startRecorder]);
+  }, [appPaused, inputMuted, startRecorder]);
 
   const routeStreamToOutput = useCallback(
     async (stream: MediaStream) => {
-      if (appPaused) {
-        throw new Error('Resume the app before playing audio.');
+      if (appPaused || outputMuted) {
+        throw new Error(
+          outputMuted
+            ? 'Unmute the speaker section before playing audio.'
+            : 'Resume the app before playing audio.',
+        );
       }
 
       const outputAudio = outputAudioRef.current;
@@ -275,12 +330,16 @@ export function useSoundCheck() {
       await applySink(outputAudio, selectedOutputId);
       await outputAudio.play();
     },
-    [appPaused, selectedOutputId],
+    [appPaused, outputMuted, selectedOutputId],
   );
 
-  const startToneTest = useCallback(async () => {
-    if (appPaused) {
-      setStatusMessage('Resume the app before playing audio.');
+  const startSpeakerTest = useCallback(async () => {
+    if (appPaused || outputMuted) {
+      setStatusMessage(
+        outputMuted
+          ? 'Unmute the speaker section before playing audio.'
+          : 'Resume the app before playing audio.',
+      );
       return;
     }
 
@@ -289,22 +348,69 @@ export function useSoundCheck() {
     stopOutputGraph();
 
     try {
-      outputGraphRef.current = await createToneOutputGraph({
-        onEnded: stopOutputGraph,
-        routeStreamToOutput,
-        setOutputLevel,
-      });
-      setRoutedMode('tone');
+      if (speakerTestSettings.kind === 'builtInMusic') {
+        outputGraphRef.current = await createAudioBufferOutputGraph({
+          getArrayBuffer: async () => {
+            const response = await fetch('/audio/blinding-lights.flac');
+
+            if (!response.ok) {
+              throw new Error('Built-in audio file could not be loaded.');
+            }
+
+            return response.arrayBuffer();
+          },
+          onEnded: stopOutputGraph,
+          routeStreamToOutput,
+          setOutputLevel,
+        });
+      } else if (speakerTestSettings.kind === 'fileMusic') {
+        if (!speakerTestSettings.musicFile) {
+          setStatusMessage('Choose an audio file before playing.');
+          return;
+        }
+
+        outputGraphRef.current = await createAudioBufferOutputGraph({
+          getArrayBuffer: () =>
+            speakerTestSettings.musicFile?.arrayBuffer() ??
+            Promise.reject(new Error('Choose an audio file before playing.')),
+          onEnded: stopOutputGraph,
+          routeStreamToOutput,
+          setOutputLevel,
+        });
+      } else {
+        outputGraphRef.current = await createSpeakerTestOutputGraph({
+          kind: speakerTestSettings.kind,
+          onEnded: stopOutputGraph,
+          routeStreamToOutput,
+          setOutputLevel,
+          toneFrequency: speakerTestSettings.toneFrequency,
+        });
+      }
+
+      setRoutedMode('speakerTest');
       setStatusMessage(`Playing test sound on ${selectedOutputName}.`);
     } catch (error) {
       stopOutputGraph();
       setErrorMessage(toErrorMessage(error));
     }
-  }, [appPaused, routeStreamToOutput, selectedOutputName, stopOutputGraph]);
+  }, [
+    appPaused,
+    outputMuted,
+    routeStreamToOutput,
+    selectedOutputName,
+    speakerTestSettings,
+    stopOutputGraph,
+  ]);
 
   const startMonitor = useCallback(async () => {
-    if (appPaused) {
-      setStatusMessage('Resume the app before monitoring input.');
+    if (appPaused || inputMuted || outputMuted) {
+      setStatusMessage(
+        inputMuted
+          ? 'Unmute the microphone section before monitoring input.'
+          : outputMuted
+            ? 'Unmute the speaker section before monitoring input.'
+            : 'Resume the app before monitoring input.',
+      );
       return;
     }
 
@@ -334,8 +440,10 @@ export function useSoundCheck() {
     }
   }, [
     appPaused,
+    inputMuted,
     ensureInputStream,
     monitorDelayMs,
+    outputMuted,
     routeStreamToOutput,
     selectedOutputName,
     stopOutputGraph,
@@ -346,6 +454,36 @@ export function useSoundCheck() {
     stopOutputGraph();
     setStatusMessage('Monitor stopped.');
   }, [stopOutputGraph]);
+
+  const toggleInputMute = useCallback(() => {
+    if (inputMuted) {
+      setInputMuted(false);
+      setStatusMessage('Microphone section unmuted.');
+      return;
+    }
+
+    stopRecording();
+    setMonitorEnabled(false);
+    if (routedMode === 'monitor') {
+      stopOutputGraph();
+    }
+    stopInputStream();
+    setInputMuted(true);
+    setStatusMessage('Microphone section muted. Input stopped.');
+  }, [inputMuted, routedMode, stopInputStream, stopOutputGraph, stopRecording]);
+
+  const toggleOutputMute = useCallback(() => {
+    if (outputMuted) {
+      setOutputMuted(false);
+      setStatusMessage('Speaker section unmuted.');
+      return;
+    }
+
+    setMonitorEnabled(false);
+    stopOutputGraph();
+    setOutputMuted(true);
+    setStatusMessage('Speaker section muted. Output stopped.');
+  }, [outputMuted, stopOutputGraph]);
 
   const pauseApp = useCallback(() => {
     stopRecording();
@@ -362,8 +500,12 @@ export function useSoundCheck() {
   }, []);
 
   const playRecordedClip = useCallback(async () => {
-    if (appPaused) {
-      setStatusMessage('Resume the app before playing audio.');
+    if (appPaused || outputMuted) {
+      setStatusMessage(
+        outputMuted
+          ? 'Unmute the speaker section before playing audio.'
+          : 'Resume the app before playing audio.',
+      );
       return;
     }
 
@@ -390,6 +532,7 @@ export function useSoundCheck() {
     }
   }, [
     appPaused,
+    outputMuted,
     recordedClip,
     routeStreamToOutput,
     selectedOutputName,
@@ -397,8 +540,12 @@ export function useSoundCheck() {
   ]);
 
   const requestMicrophoneAccess = useCallback(async () => {
-    if (appPaused) {
-      setStatusMessage('Resume the app before enabling the microphone.');
+    if (appPaused || inputMuted) {
+      setStatusMessage(
+        inputMuted
+          ? 'Unmute the microphone section before enabling input.'
+          : 'Resume the app before enabling the microphone.',
+      );
       return;
     }
 
@@ -411,7 +558,13 @@ export function useSoundCheck() {
       setPermissionState('blocked');
       setErrorMessage(toErrorMessage(error));
     }
-  }, [appPaused, refreshDevices, selectedInputId, startInputStream]);
+  }, [
+    appPaused,
+    inputMuted,
+    refreshDevices,
+    selectedInputId,
+    startInputStream,
+  ]);
 
   const requestOutputAccess = useCallback(async () => {
     const mediaDevices = navigator.mediaDevices as MediaDevicesWithOutputPicker;
@@ -452,6 +605,27 @@ export function useSoundCheck() {
     },
     [],
   );
+
+  const handleSpeakerTestKindChange = useCallback((kind: SpeakerTestKind) => {
+    setSpeakerTestSettings((currentSettings) => ({
+      ...currentSettings,
+      kind,
+    }));
+  }, []);
+
+  const handleSpeakerToneFrequencyChange = useCallback((frequency: number) => {
+    setSpeakerTestSettings((currentSettings) => ({
+      ...currentSettings,
+      toneFrequency: clamp(frequency, 40, 12000),
+    }));
+  }, []);
+
+  const handleSpeakerMusicFileChange = useCallback((musicFile: File | null) => {
+    setSpeakerTestSettings((currentSettings) => ({
+      ...currentSettings,
+      musicFile,
+    }));
+  }, []);
 
   const handleProcessingEnabledChange = useCallback(
     (enabled: boolean) => {
@@ -519,7 +693,7 @@ export function useSoundCheck() {
   }, [refreshDevices]);
 
   useEffect(() => {
-    if (appPaused || permissionState !== 'granted') {
+    if (appPaused || inputMuted || permissionState === 'blocked') {
       return;
     }
 
@@ -538,6 +712,7 @@ export function useSoundCheck() {
         })
         .catch((error) => {
           if (!cancelled) {
+            setPermissionState('blocked');
             setErrorMessage(toErrorMessage(error));
           }
         });
@@ -548,6 +723,7 @@ export function useSoundCheck() {
     };
   }, [
     appPaused,
+    inputMuted,
     permissionState,
     processingEnabled,
     processingSettings,
@@ -587,8 +763,13 @@ export function useSoundCheck() {
     selectedInputName,
     selectedOutputName,
     appPaused,
+    inputMuted,
+    inputSignalState,
+    outputMuted,
+    outputSignalState,
     processingEnabled,
     processingSettings,
+    speakerTestSettings,
     monitorEnabled,
     monitorDelayMs,
     routedMode,
@@ -603,8 +784,10 @@ export function useSoundCheck() {
     errorMessage,
     pauseApp,
     resumeApp,
+    toggleInputMute,
+    toggleOutputMute,
     refreshDevices,
-    startToneTest,
+    startSpeakerTest,
     stopOutputGraph,
     startMonitor,
     stopMonitor,
@@ -615,6 +798,9 @@ export function useSoundCheck() {
     requestOutputAccess,
     handleInputChange,
     handleOutputChange,
+    handleSpeakerMusicFileChange,
+    handleSpeakerTestKindChange,
+    handleSpeakerToneFrequencyChange,
     handleProcessingEnabledChange,
     handleProcessingSettingChange,
     handleDelayChange,

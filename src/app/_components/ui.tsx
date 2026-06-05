@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { AudioStatus, StatusTone } from '@/utils/types';
+import type { StatusTone } from '@/utils/types';
 import { clamp, joinClasses } from '@/utils/utils';
 
 export function Panel({
@@ -107,23 +107,6 @@ export function Toggle({
   );
 }
 
-export function DeviceSummary({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="border-line bg-panel-soft rounded-lg border p-3">
-      <p className="text-muted text-xs font-semibold uppercase">{label}</p>
-      <p className="text-foreground mt-1 truncate text-sm font-semibold">
-        {value}
-      </p>
-    </div>
-  );
-}
-
 export function StatusPill({
   children,
   tone,
@@ -147,60 +130,29 @@ export function StatusPill({
 }
 
 export function LevelMeter({
+  accent = 'control',
   className,
   level,
 }: {
+  accent?: 'control' | 'input' | 'output';
   className?: string;
   level: number;
 }) {
-  const bars = Array.from({ length: 18 }, (_, index) => index);
-  const activeBars = Math.round(clamp(level, 0, 1) * bars.length);
+  const boundedLevel = clamp(level, 0, 1);
 
   return (
     <div
-      className={joinClasses(
-        'grid grid-cols-[repeat(18,minmax(0,1fr))] gap-1',
-        className,
-      )}
+      className={joinClasses('bg-panel-strong h-2 overflow-hidden', className)}
     >
-      {bars.map((bar) => (
-        <span
-          key={bar}
-          className={joinClasses(
-            'h-8 rounded-sm border transition-colors duration-75',
-            bar < activeBars && bar < 12
-              ? 'border-control bg-control'
-              : bar < activeBars && bar < 16
-                ? 'border-warning bg-warning'
-                : bar < activeBars
-                  ? 'border-danger bg-danger'
-                  : 'border-line bg-panel',
-          )}
-        />
-      ))}
-    </div>
-  );
-}
-
-export function OutputReadout({
-  level,
-  outputStatus,
-}: {
-  level: number;
-  outputStatus: AudioStatus;
-}) {
-  return (
-    <div className="border-line bg-panel-soft mt-5 rounded-lg border p-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-foreground text-sm font-semibold">Output level</p>
-          <p className="text-muted mt-1 text-xs">{outputStatus.label}</p>
-        </div>
-        <StatusPill tone={outputStatus.tone}>
-          {outputStatus.shortLabel}
-        </StatusPill>
-      </div>
-      <LevelMeter className="mt-4" level={level} />
+      <span
+        className={joinClasses(
+          'block h-full origin-left transition-transform duration-75',
+          accent === 'control' && 'bg-control',
+          accent === 'input' && 'bg-input',
+          accent === 'output' && 'bg-output',
+        )}
+        style={{ transform: `scaleX(${boundedLevel})` }}
+      />
     </div>
   );
 }

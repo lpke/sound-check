@@ -1,27 +1,29 @@
 @import 'tailwindcss';
 
 @theme {
-  --color-background: #f6f7fb;
-  --color-foreground: #181d27;
-  --color-muted: #667085;
+  --color-background: #f7f8fa;
+  --color-foreground: #171a1f;
+  --color-muted: #66737f;
   --color-panel: #ffffff;
-  --color-panel-soft: #f2f5f9;
-  --color-panel-strong: #e6ebf2;
-  --color-line: #d7dde8;
-  --color-control: #2563eb;
-  --color-control-hover: #1d4ed8;
-  --color-control-soft: #dbeafe;
+  --color-panel-soft: #f4f6f8;
+  --color-panel-strong: #e8edf2;
+  --color-line: #d9dee5;
+  --color-control: #2f8f4e;
+  --color-control-hover: #25763f;
+  --color-control-soft: #dff3e6;
   --color-on-control: #ffffff;
   --color-warning: #b45309;
   --color-warning-soft: #fff3d6;
   --color-danger: #b42318;
   --color-danger-soft: #ffe4df;
-  --color-input: #0891b2;
-  --color-input-soft: #e5f7fb;
-  --color-output: #4f46e5;
-  --color-output-soft: #ecebff;
-  --color-signal: #2563eb;
-  --color-signal-soft: #dbeafe;
+  --color-input: #2f8f4e;
+  --color-input-soft: #eaf6ee;
+  --color-output: #2f70d0;
+  --color-output-soft: #edf3fd;
+  --color-signal: #2f8f4e;
+  --color-signal-soft: #eaf6ee;
+  --color-status-ready: #4c79aa;
+  --color-status-active: #2464c2;
 
   --font-headline: 'Space Grotesk', system-ui, sans-serif;
   --font-body: 'Inter', system-ui, sans-serif;
@@ -51,7 +53,7 @@ body {
   min-height: 100vh;
   margin: 0;
   background:
-    linear-gradient(180deg, rgba(226, 232, 240, 0.72), transparent 22rem),
+    linear-gradient(180deg, rgba(232, 237, 242, 0.78), transparent 22rem),
     var(--color-background);
 }
 
