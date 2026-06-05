@@ -47,6 +47,7 @@ export type ActiveOutputGraph = {
   pause?: () => void;
   playFrom?: (offsetSeconds: number) => void;
   updateDelay?: (seconds: number) => void;
+  updateToneFrequency?: (frequency: number) => void;
 };
 
 export type RecordedClip = {

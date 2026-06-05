@@ -22,7 +22,7 @@ If asked to make changes that require Next.js specific knowledge, the following 
 
 - IO = shorthand for Input/Output
 - DEVICE = any input or output device
-- Site HEADER = the area at the top of the app, outside of the input/output sections.
+- Site FOOTER = the area at the bottom of the app, outside of the input/output sections.
 - IO SECTION = the container for input/output settings.
 - IO HEADER = the part of an input/output section with the background color. It contains the icon, selected device, and status indicator dot on the right.
 - IO STATUS = the dot on the right of each IO section's header

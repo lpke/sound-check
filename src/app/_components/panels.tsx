@@ -20,8 +20,15 @@ import { clamp, formatSeconds, joinClasses } from '@/utils/utils';
 import { DebugModal } from './DebugModal';
 import { Button, Field, LevelMeter, Panel } from './ui';
 
+const LOG_SCALE_POWER = 1.2;
+
 type SoundCheckProps = {
   soundCheck: SoundCheckController;
+};
+
+type SiteFooterProps = {
+  soundCheck: SoundCheckController;
+  onRecheckPermission?: () => void;
 };
 
 type SectionAccent = 'input' | 'output';
@@ -34,28 +41,39 @@ const speakerTestOptions: { kind: SpeakerTestKind; label: string }[] = [
   { kind: 'music', label: 'Music' },
 ];
 
-export function SiteHeader({ soundCheck }: SoundCheckProps) {
+export function SiteFooter({
+  soundCheck,
+  onRecheckPermission,
+}: SiteFooterProps) {
   return (
-    <header className="flex justify-end gap-2">
-      <DebugModal soundCheck={soundCheck} />
-      <button
-        type="button"
-        onClick={soundCheck.toggleAllAudio}
-        className={joinClasses(
-          'inline-flex h-10 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-semibold transition focus:outline-none active:translate-y-px active:scale-[0.985]',
-          soundCheck.allAudioStopped
-            ? 'border-control bg-control text-on-control hover:bg-control-hover'
-            : 'border-line bg-panel text-foreground hover:bg-panel-soft',
-        )}
-      >
-        {soundCheck.allAudioStopped ? (
-          <PlayIcon aria-hidden="true" className="h-4 w-4" />
-        ) : (
-          <PauseIcon aria-hidden="true" className="h-4 w-4" />
-        )}
-        {soundCheck.allAudioStopped ? 'Resume all' : 'Pause all'}
-      </button>
-    </header>
+    <footer className="mt-2 flex items-center justify-between gap-2 pb-1">
+      <div className="flex-1">
+        {onRecheckPermission ? (
+          <button
+            type="button"
+            onClick={onRecheckPermission}
+            className="text-muted/70 hover:text-muted text-sm underline underline-offset-2 transition focus:outline-none"
+          >
+            Recheck permission and refresh devices
+          </button>
+        ) : null}
+      </div>
+      <div className="flex items-center justify-end gap-2">
+        <DebugModal soundCheck={soundCheck} />
+        <button
+          type="button"
+          onClick={soundCheck.toggleAllAudio}
+          className={joinClasses(
+            'inline-flex h-10 w-28 items-center justify-center rounded-lg border px-3 text-sm font-semibold whitespace-nowrap transition focus:outline-none active:translate-y-px active:scale-[0.985]',
+            soundCheck.allAudioStopped
+              ? 'border-control bg-control text-on-control hover:bg-control-hover'
+              : 'border-line bg-panel text-foreground hover:bg-panel-soft',
+          )}
+        >
+          {soundCheck.allAudioStopped ? 'Resume all' : 'Pause all'}
+        </button>
+      </div>
+    </footer>
   );
 }
 
@@ -108,8 +126,7 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
   const testKind = soundCheck.speakerTestSettings.kind;
   const needsFrequency = usesToneFrequency(testKind);
   const isSpeakerTestActive = soundCheck.routedMode === 'speakerTest';
-  const isOutputBusy =
-    soundCheck.routedMode !== 'idle' && soundCheck.routedMode !== 'speakerTest';
+  const isToneTestPlaying = isSpeakerTestActive;
 
   function handleSpeakerTestKindChange(event: ChangeEvent<HTMLSelectElement>) {
     const nextKind = event.target.value as SpeakerTestKind;
@@ -163,70 +180,50 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
           </SettingsGroup>
         ) : null}
 
-        <SettingsGroup
-          title="Speaker test"
-          description="Generated tones are routed directly to the selected output. Music playback is decoded only when you play it."
-        >
+        <SettingsGroup title="Speaker test">
           <div className="grid gap-4">
             <Field label="Sound">
-              <select
-                id="speaker-test-kind"
-                name="speaker-test-kind"
-                value={testKind}
-                onChange={handleSpeakerTestKindChange}
-                className={controlClassName('output')}
-              >
-                {speakerTestOptions.map((option) => (
-                  <option key={option.kind} value={option.kind}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <select
+                  id="speaker-test-kind"
+                  name="speaker-test-kind"
+                  value={testKind}
+                  onChange={handleSpeakerTestKindChange}
+                  className={joinClasses(
+                    controlClassName('output'),
+                    'appearance-none pr-9',
+                  )}
+                >
+                  {speakerTestOptions.map((option) => (
+                    <option key={option.kind} value={option.kind}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDownIcon
+                  aria-hidden="true"
+                  className="text-muted pointer-events-none absolute top-1/2 right-2.5 h-4 w-4 -translate-y-1/2"
+                />
+              </div>
             </Field>
 
             {needsFrequency ? (
-              <div className="grid gap-2">
-                <Field
-                  label={`Tone frequency: ${soundCheck.speakerTestSettings.toneFrequency} Hz`}
-                >
-                  <input
-                    id="speaker-test-frequency"
-                    name="speaker-test-frequency"
-                    type="range"
-                    min={40}
-                    max={12000}
-                    step={10}
-                    value={soundCheck.speakerTestSettings.toneFrequency}
-                    onChange={(event) =>
-                      soundCheck.handleSpeakerToneFrequencyChange(
-                        Number(event.target.value),
-                      )
-                    }
-                    className={rangeClassName('output')}
-                  />
-                </Field>
-                <div className="grid grid-cols-[1fr_auto] gap-2">
-                  <input
-                    id="speaker-test-frequency-number"
-                    name="speaker-test-frequency-number"
-                    aria-label="Tone frequency in hertz"
-                    type="number"
-                    min={40}
-                    max={12000}
-                    step={10}
-                    value={soundCheck.speakerTestSettings.toneFrequency}
-                    onChange={(event) =>
-                      soundCheck.handleSpeakerToneFrequencyChange(
-                        Number(event.target.value),
-                      )
-                    }
-                    className={numberInputClassName('output')}
-                  />
-                  <span className="border-line bg-panel-soft text-muted flex h-11 items-center rounded-lg border px-3 text-sm">
-                    Hz
-                  </span>
-                </div>
-              </div>
+              <RangeWithUnit
+                accent="output"
+                ariaLabel="Tone frequency in hertz"
+                idBase="speaker-test-frequency"
+                label="Tone frequency"
+                max={12000}
+                min={40}
+                step={10}
+                scaleMode="log"
+                showLabel={false}
+                unit="Hz"
+                value={soundCheck.speakerTestSettings.toneFrequency}
+                onChange={(nextValue) =>
+                  soundCheck.handleSpeakerToneFrequencyChange(nextValue)
+                }
+              />
             ) : null}
 
             <input
@@ -250,26 +247,19 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
             ) : null}
 
             {testKind !== 'music' ? (
-              <div className="flex flex-wrap gap-2">
+              <div className="mt-2 flex flex-wrap gap-2">
                 <Button
-                  variant="outputPrimary"
-                  onClick={soundCheck.startSpeakerTest}
-                  disabled={
-                    soundCheck.appPaused ||
-                    soundCheck.outputMuted ||
-                    isOutputBusy
+                  variant={isToneTestPlaying ? 'danger' : 'outputPrimary'}
+                  onClick={
+                    isToneTestPlaying
+                      ? soundCheck.stopPlaybackOutput
+                      : soundCheck.startSpeakerTest
                   }
+                  disabled={soundCheck.appPaused || soundCheck.outputMuted}
+                  className="w-40"
                 >
-                  Play test sound
+                  {isToneTestPlaying ? 'Stop test sound' : 'Play test sound'}
                 </Button>
-                {isSpeakerTestActive && !soundCheck.appPaused ? (
-                  <Button
-                    variant="outputSecondary"
-                    onClick={soundCheck.stopOutputGraph}
-                  >
-                    Stop
-                  </Button>
-                ) : null}
               </div>
             ) : null}
           </div>
@@ -359,7 +349,7 @@ function SectionHeader({
         <Icon aria-hidden="true" className="h-5 w-5" />
       </button>
 
-      <label className="relative inline-flex max-w-full min-w-44 items-center justify-self-start py-1 pr-7 text-left">
+      <label className="relative inline-flex max-w-full min-w-44 items-center justify-self-start py-1 pr-10 text-left">
         <span className="sr-only">{selectLabel}</span>
         <span
           className="text-foreground min-w-0 truncate text-lg leading-tight font-semibold sm:text-xl"
@@ -370,7 +360,7 @@ function SectionHeader({
         {canChangeDevice ? (
           <ChevronDownIcon
             aria-hidden="true"
-            className="text-muted pointer-events-none ml-1.5 h-4 w-4 shrink-0"
+            className="text-muted pointer-events-none mr-2 ml-1.5 h-4 w-4 shrink-0"
           />
         ) : null}
         <select
@@ -430,13 +420,10 @@ function SignalDot({ state }: { state: SectionSignalState }) {
 
 function ProcessingBlock({ soundCheck }: SoundCheckProps) {
   return (
-    <SettingsGroup
-      title="Capture processing"
-      description="Off gives the raw microphone stream for monitoring and recording. Enable these browser controls only when you want the call-style processed signal."
-    >
+    <SettingsGroup>
       <label className="flex cursor-pointer items-center justify-between gap-4">
         <span className="text-foreground text-sm font-semibold">
-          Enable processing
+          Enable capture processing
         </span>
         <input
           id="processing-enabled"
@@ -534,46 +521,30 @@ function LiveMonitorBlock({ soundCheck }: SoundCheckProps) {
   return (
     <SettingsGroup title="Live monitor">
       <div className="grid gap-4">
-        <Field label={`Delay: ${soundCheck.monitorDelayMs} ms`}>
-          <input
-            id="monitor-delay"
-            name="monitor-delay"
-            type="range"
-            min={0}
-            max={MAX_MONITOR_DELAY_MS}
-            step={100}
-            value={soundCheck.monitorDelayMs}
-            onChange={(event) =>
-              soundCheck.handleDelayChange(Number(event.target.value))
-            }
-            className={rangeClassName('input')}
-          />
-        </Field>
-        <div className="grid grid-cols-[1fr_auto] gap-2">
-          <input
-            id="monitor-delay-ms"
-            name="monitor-delay-ms"
-            aria-label="Monitor delay in milliseconds"
-            type="number"
-            min={0}
-            max={MAX_MONITOR_DELAY_MS}
-            step={100}
-            value={soundCheck.monitorDelayMs}
-            onChange={(event) =>
-              soundCheck.handleDelayChange(Number(event.target.value))
-            }
-            className={numberInputClassName('input')}
-          />
-          <span className="border-line bg-panel text-muted flex h-11 items-center rounded-lg border px-3 text-sm">
-            ms
-          </span>
-        </div>
+        <RangeWithUnit
+          accent="input"
+          ariaLabel="Monitor delay in milliseconds"
+          idBase="monitor-delay"
+          label="Delay"
+          max={MAX_MONITOR_DELAY_MS}
+          min={0}
+          step={100}
+          unit="ms"
+          value={soundCheck.monitorDelayMs}
+          showValueInLabel={false}
+          onChange={(nextValue) => soundCheck.handleDelayChange(nextValue)}
+        />
         {soundCheck.monitorEnabled ? (
-          <Button variant="secondary" onClick={soundCheck.stopMonitor}>
+          <Button
+            variant="danger"
+            onClick={soundCheck.stopMonitor}
+            className="mt-2 w-40"
+          >
             Stop monitor
           </Button>
         ) : (
           <Button
+            className="mt-2 w-40"
             disabled={
               soundCheck.appPaused ||
               soundCheck.inputMuted ||
@@ -620,19 +591,12 @@ function RecordingCapture({ soundCheck }: SoundCheckProps) {
 
 function RecordingPlayback({ soundCheck }: SoundCheckProps) {
   return (
-    <SettingsGroup
-      title="Recorded playback"
-      description={
-        soundCheck.recordedClips.length
-          ? `${soundCheck.recordedClips.length} clips ready.`
-          : 'No clip recorded.'
-      }
-    >
+    <SettingsGroup title="Recorded playback">
       <div className="grid gap-2">
         {soundCheck.recordedClips.length === 0 ? (
           <p className="text-muted text-sm">No recordings yet.</p>
         ) : (
-          soundCheck.recordedClips.map((clip) => {
+          soundCheck.recordedClips.map((clip, index) => {
             const isActive =
               soundCheck.recordedPlayback.activeClipId === clip.id;
             const isPlaying = isActive && soundCheck.recordedPlayback.isPlaying;
@@ -641,39 +605,9 @@ function RecordingPlayback({ soundCheck }: SoundCheckProps) {
             const recordingName = clip.name || 'Recording';
 
             return (
-              <div
-                key={clip.id}
-                className={joinClasses(
-                  'border-line bg-panel grid gap-3 rounded-lg border p-3',
-                  isActive && 'border-output/45 bg-output-soft/30',
-                )}
-              >
-                <AudioPlaybackControls
-                  buttonLabel={
-                    isPlaying
-                      ? `Pause ${recordingName}`
-                      : `Play ${recordingName}`
-                  }
-                  canUseTransport={
-                    !soundCheck.appPaused &&
-                    !soundCheck.outputMuted &&
-                    clip.durationSeconds > 0
-                  }
-                  durationSeconds={clip.durationSeconds}
-                  isPlaying={isPlaying}
-                  onSeek={(nextPosition) => {
-                    soundCheck.selectRecordedClip(clip.id);
-                    soundCheck.handleRecordedClipSeek(clip.id, nextPosition);
-                  }}
-                  onToggle={() => {
-                    soundCheck.selectRecordedClip(clip.id);
-                    soundCheck.toggleRecordedClipPlayback(clip.id);
-                  }}
-                  positionSeconds={positionSeconds}
-                  seekLabel={`${recordingName} playback position`}
-                  seekName={`recorded-clip-position-${clip.id}`}
-                >
-                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+              <div key={clip.id} className="contents">
+                <div className="grid gap-3 py-2">
+                  <div className="grid gap-2">
                     <input
                       id={`recorded-clip-name-${clip.id}`}
                       name={`recorded-clip-name-${clip.id}`}
@@ -692,16 +626,44 @@ function RecordingPlayback({ soundCheck }: SoundCheckProps) {
                       placeholder="Recording"
                       aria-label="Rename recording"
                       title="Rename recording"
-                      className="border-line bg-panel text-foreground focus:border-output focus:ring-output-soft h-10 min-w-0 rounded-lg border px-3 text-sm transition outline-none focus:ring-4"
+                      className="text-foreground focus:border-b-output h-7 min-w-0 border-b border-transparent bg-transparent px-0 text-sm leading-tight transition focus:ring-0 focus:outline-none"
                     />
                     <span
-                      className="text-muted truncate text-xs"
+                      className="text-muted block text-xs"
                       title={clip.inputDeviceName}
                     >
-                      {clip.inputDeviceName}
+                      Device: {clip.inputDeviceName}
                     </span>
                   </div>
-                </AudioPlaybackControls>
+                  <AudioPlaybackControls
+                    buttonLabel={
+                      isPlaying
+                        ? `Pause ${recordingName}`
+                        : `Play ${recordingName}`
+                    }
+                    canUseTransport={
+                      !soundCheck.appPaused &&
+                      !soundCheck.outputMuted &&
+                      clip.durationSeconds > 0
+                    }
+                    durationSeconds={clip.durationSeconds}
+                    isPlaying={isPlaying}
+                    onSeek={(nextPosition) => {
+                      soundCheck.selectRecordedClip(clip.id);
+                      soundCheck.handleRecordedClipSeek(clip.id, nextPosition);
+                    }}
+                    onToggle={() => {
+                      soundCheck.selectRecordedClip(clip.id);
+                      soundCheck.toggleRecordedClipPlayback(clip.id);
+                    }}
+                    positionSeconds={positionSeconds}
+                    seekLabel={`${recordingName} playback position`}
+                    seekName={`recorded-clip-position-${clip.id}`}
+                  />
+                </div>
+                {index < soundCheck.recordedClips.length - 1 ? (
+                  <hr className="border-line -mx-1 mt-2 border-t" />
+                ) : null}
               </div>
             );
           })
@@ -740,14 +702,17 @@ function AudioPlaybackControls({
     : 0;
 
   return (
-    <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
+    <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-6">
       <button
         type="button"
         aria-label={buttonLabel}
         title={buttonLabel}
         onClick={onToggle}
         disabled={!canUseTransport}
-        className="bg-output text-on-control hover:bg-output/90 flex h-12 w-12 shrink-0 items-center justify-center rounded-full shadow-[0_8px_22px_rgba(26,89,168,0.2)] transition focus:outline-none active:translate-y-px active:scale-95 disabled:opacity-45 disabled:shadow-none disabled:active:translate-y-0 disabled:active:scale-100"
+        className={joinClasses(
+          'flex h-12 w-12 shrink-0 items-center justify-center rounded-full transition focus:outline-none active:translate-y-px active:scale-95 disabled:opacity-45 disabled:active:translate-y-0 disabled:active:scale-100',
+          isPlaying ? 'bg-danger text-white' : 'bg-output text-on-control',
+        )}
       >
         {isPlaying ? (
           <PauseIcon aria-hidden="true" className="h-5 w-5" />
@@ -756,27 +721,29 @@ function AudioPlaybackControls({
         )}
       </button>
 
-      <div className="grid min-w-0 gap-2">
+      <div className="grid min-w-0 gap-0">
         {children}
-        <div className="text-muted flex items-center justify-between gap-3 text-xs font-semibold">
-          <span>{formatSeconds(boundedPosition)}</span>
-          <span>
-            {hasDuration ? formatSeconds(durationSeconds) : '--:--.-'}
-          </span>
+        <div className="grid gap-0">
+          <input
+            id={seekName}
+            name={seekName}
+            aria-label={seekLabel}
+            type="range"
+            min={0}
+            max={durationSeconds || 1}
+            step={0.05}
+            value={boundedPosition}
+            disabled={!hasDuration}
+            onChange={(event) => onSeek(Number(event.target.value))}
+            className={joinClasses(rangeClassName('output'), '-mb-2')}
+          />
+          <div className="text-muted flex items-center justify-between gap-3 text-xs font-semibold">
+            <span>{formatSeconds(boundedPosition)}</span>
+            <span>
+              {hasDuration ? formatSeconds(durationSeconds) : '--:--.-'}
+            </span>
+          </div>
         </div>
-        <input
-          id={seekName}
-          name={seekName}
-          aria-label={seekLabel}
-          type="range"
-          min={0}
-          max={durationSeconds || 1}
-          step={0.05}
-          value={boundedPosition}
-          disabled={!hasDuration}
-          onChange={(event) => onSeek(Number(event.target.value))}
-          className={rangeClassName('output')}
-        />
       </div>
     </div>
   );
@@ -800,23 +767,30 @@ function MusicConfig({
     soundCheck.speakerTestSettings.kind === 'music' &&
     !soundCheck.appPaused &&
     !soundCheck.outputMuted &&
-    !needsFile &&
-    (soundCheck.routedMode === 'idle' ||
-      soundCheck.routedMode === 'speakerTest');
+    !needsFile;
 
   return (
     <div className="grid gap-4">
       <Field label="Music source">
-        <select
-          id="speaker-music-source"
-          name="speaker-music-source"
-          value={soundCheck.speakerTestSettings.musicSource}
-          onChange={onMusicSourceChange}
-          className={controlClassName('output')}
-        >
-          <option value="builtIn">Blinding Lights</option>
-          <option value="file">Audio file</option>
-        </select>
+        <div className="relative">
+          <select
+            id="speaker-music-source"
+            name="speaker-music-source"
+            value={soundCheck.speakerTestSettings.musicSource}
+            onChange={onMusicSourceChange}
+            className={joinClasses(
+              controlClassName('output'),
+              'appearance-none pr-9',
+            )}
+          >
+            <option value="builtIn">Blinding Lights</option>
+            <option value="file">Audio file</option>
+          </select>
+          <ChevronDownIcon
+            aria-hidden="true"
+            className="text-muted pointer-events-none absolute top-1/2 right-2.5 h-4 w-4 -translate-y-1/2"
+          />
+        </div>
       </Field>
 
       {soundCheck.speakerTestSettings.musicSource === 'file' ? (
@@ -834,41 +808,37 @@ function MusicConfig({
         </div>
       ) : null}
 
-      <div className="border-line bg-panel grid gap-3 rounded-lg border p-3">
-        <AudioPlaybackControls
-          buttonLabel={isPlaying ? 'Pause music' : 'Play music'}
-          canUseTransport={canUseTransport}
-          durationSeconds={durationSeconds}
-          isPlaying={isPlaying}
-          onSeek={soundCheck.handleMusicSeek}
-          onToggle={soundCheck.toggleMusicPlayback}
-          positionSeconds={positionSeconds}
-          seekLabel="Music playback position"
-          seekName="music-playback-position"
-        />
+      <AudioPlaybackControls
+        buttonLabel={isPlaying ? 'Pause music' : 'Play music'}
+        canUseTransport={canUseTransport}
+        durationSeconds={durationSeconds}
+        isPlaying={isPlaying}
+        onSeek={soundCheck.handleMusicSeek}
+        onToggle={soundCheck.toggleMusicPlayback}
+        positionSeconds={positionSeconds}
+        seekLabel="Music playback position"
+        seekName="music-playback-position"
+      />
 
-        <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant="outputSecondary"
+          onClick={soundCheck.markMusicPosition}
+          disabled={!hasLoadedMusic}
+        >
+          Mark part
+        </Button>
+        {markSeconds !== null ? (
           <Button
             variant="outputSecondary"
-            onClick={soundCheck.markMusicPosition}
-            disabled={!hasLoadedMusic}
+            onClick={soundCheck.playMusicFromMark}
+            disabled={
+              soundCheck.appPaused || soundCheck.outputMuted || !hasLoadedMusic
+            }
           >
-            Mark part
+            Jump to {formatSeconds(markSeconds)}
           </Button>
-          {markSeconds !== null ? (
-            <Button
-              variant="outputSecondary"
-              onClick={soundCheck.playMusicFromMark}
-              disabled={
-                soundCheck.appPaused ||
-                soundCheck.outputMuted ||
-                !hasLoadedMusic
-              }
-            >
-              Jump to {formatSeconds(markSeconds)}
-            </Button>
-          ) : null}
-        </div>
+        ) : null}
       </div>
     </div>
   );
@@ -881,16 +851,20 @@ function SettingsGroup({
 }: {
   children: ReactNode;
   description?: ReactNode;
-  title: string;
+  title?: string;
 }) {
   return (
     <section className="border-line bg-panel-soft rounded-lg border p-4">
-      <div className="mb-4">
-        <h2 className="text-foreground text-sm font-semibold">{title}</h2>
-        {description ? (
-          <p className="text-muted mt-1 text-xs leading-5">{description}</p>
-        ) : null}
-      </div>
+      {title || description ? (
+        <div className="mb-4">
+          {title ? (
+            <h2 className="text-foreground text-sm font-semibold">{title}</h2>
+          ) : null}
+          {description ? (
+            <p className="text-muted mt-1 text-xs leading-5">{description}</p>
+          ) : null}
+        </div>
+      ) : null}
       {children}
     </section>
   );
@@ -941,14 +915,17 @@ function RefreshButton({
 
 function controlClassName(accent: SectionAccent) {
   return joinClasses(
-    'border-line bg-panel text-foreground h-11 w-full rounded-lg border px-3 text-sm transition outline-none focus:ring-4',
+    'border-line bg-panel text-foreground h-11 w-full rounded-lg border px-3 pr-10 text-sm transition outline-none focus:ring-4 appearance-none',
     accent === 'input' && 'focus:border-input focus:ring-input-soft',
     accent === 'output' && 'focus:border-output focus:ring-output-soft',
   );
 }
 
 function numberInputClassName(accent: SectionAccent) {
-  return joinClasses(controlClassName(accent), 'font-mono');
+  return joinClasses(
+    controlClassName(accent),
+    'rounded-t-lg border-0 border-b-0 font-mono focus:border-0 focus:outline-none focus:ring-0 focus-visible:border-0 focus-visible:outline-none focus-visible:ring-0',
+  );
 }
 
 function rangeClassName(accent: SectionAccent) {
@@ -956,6 +933,237 @@ function rangeClassName(accent: SectionAccent) {
     'h-11 w-full rounded-lg outline-none focus-visible:ring-4',
     accent === 'input' && 'accent-input focus-visible:ring-input-soft',
     accent === 'output' && 'accent-output focus-visible:ring-output-soft',
+  );
+}
+
+function rangeBarClassName() {
+  return joinClasses(
+    'h-3 w-full cursor-ew-resize rounded-b-none rounded-t-none border-0 bg-line outline-none appearance-none',
+    '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-0 [&::-webkit-slider-thumb]:w-0 [&::-webkit-slider-thumb]:m-0 [&::-webkit-slider-thumb]:border-0 [&::-webkit-slider-thumb]:bg-transparent',
+    '[&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:h-0 [&::-moz-range-thumb]:w-0 [&::-moz-range-thumb]:m-0 [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-transparent',
+    '[&::-webkit-slider-runnable-track]:h-3 [&::-webkit-slider-runnable-track]:rounded-none',
+    '[&::-moz-range-track]:h-3 [&::-moz-range-track]:rounded-none',
+  );
+}
+
+function logScaleValue(
+  value: number,
+  min: number,
+  max: number,
+  scaleMin: number,
+  scaleMax: number,
+) {
+  if (value <= min) {
+    return scaleMin;
+  }
+
+  if (value >= max) {
+    return scaleMax;
+  }
+
+  const clamped = clamp(value, min, max);
+  const ratio =
+    (Math.log10(clamped) - Math.log10(min)) /
+    (Math.log10(max) - Math.log10(min));
+
+  return scaleMin + Math.pow(ratio, LOG_SCALE_POWER) * (scaleMax - scaleMin);
+}
+
+function antiLogScaleValue(
+  value: number,
+  min: number,
+  max: number,
+  scaleMin: number,
+  scaleMax: number,
+  step: number,
+) {
+  const clamped = clamp(value, scaleMin, scaleMax);
+  const ratio = (clamped - scaleMin) / (scaleMax - scaleMin);
+  const adjustedRatio = Math.pow(ratio, 1 / LOG_SCALE_POWER);
+  const raw = min * Math.pow(max / min, adjustedRatio);
+  const quantized = Math.round(raw / step) * step;
+
+  return clamp(quantized, min, max);
+}
+
+function RangeWithUnit({
+  accent,
+  ariaLabel,
+  idBase,
+  label,
+  max,
+  min,
+  step,
+  showLabel = true,
+  scaleMode = 'linear',
+  showValueInLabel = true,
+  unit,
+  value,
+  onChange,
+}: {
+  accent: SectionAccent;
+  ariaLabel: string;
+  idBase: string;
+  label: string;
+  max: number;
+  min: number;
+  step: number;
+  showLabel?: boolean;
+  scaleMode?: 'linear' | 'log';
+  showValueInLabel?: boolean;
+  unit: string;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  const scaleMin = 0;
+  const scaleMax = 1000;
+  const isLogScale = scaleMode === 'log';
+  const sliderMin = isLogScale ? scaleMin : min;
+  const sliderMax = isLogScale ? scaleMax : max;
+  const sliderStep = isLogScale ? 1 : step;
+  const sliderValue = isLogScale
+    ? logScaleValue(value, min, max, scaleMin, scaleMax)
+    : value;
+  const fillPercent = isLogScale
+    ? clamp(((sliderValue - scaleMin) / (scaleMax - scaleMin)) * 100, 0, 100)
+    : max === min
+      ? 0
+      : clamp(((value - min) / (max - min)) * 100, 0, 100);
+  const fillColor = accent === 'input' ? '#2f8f4e' : '#2f70d0';
+  const [isNumberEditing, setIsNumberEditing] = useState(false);
+
+  return (
+    <div className="grid gap-1">
+      {showLabel ? (
+        <Field label={showValueInLabel ? `${label}: ${value} ${unit}` : label}>
+          <div
+            className={joinClasses(
+              'relative grid w-full overflow-hidden rounded-lg border transition-colors',
+              isNumberEditing
+                ? accent === 'input'
+                  ? 'border-input'
+                  : 'border-output'
+                : 'border-line',
+            )}
+            style={{
+              backgroundColor: 'var(--color-panel)',
+            }}
+          >
+            <div className="relative">
+              <input
+                id={`${idBase}-number`}
+                name={`${idBase}-number`}
+                aria-label={ariaLabel}
+                type="number"
+                min={min}
+                max={max}
+                step={step}
+                value={value}
+                onChange={(event) => onChange(Number(event.target.value))}
+                onFocus={() => setIsNumberEditing(true)}
+                onBlur={() => setIsNumberEditing(false)}
+                className={joinClasses(numberInputClassName(accent), 'pr-10')}
+              />
+              <span className="text-muted pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm">
+                {unit}
+              </span>
+            </div>
+            <input
+              id={idBase}
+              name={idBase}
+              type="range"
+              min={sliderMin}
+              max={sliderMax}
+              step={sliderStep}
+              value={sliderValue}
+              onChange={(event) => {
+                const rawValue = Number(event.target.value);
+
+                onChange(
+                  isLogScale
+                    ? antiLogScaleValue(
+                        rawValue,
+                        min,
+                        max,
+                        scaleMin,
+                        scaleMax,
+                        step,
+                      )
+                    : rawValue,
+                );
+              }}
+              className={rangeBarClassName()}
+              style={{
+                background: `linear-gradient(to right, ${fillColor} ${fillPercent}%, var(--color-line) ${fillPercent}%)`,
+              }}
+            />
+          </div>
+        </Field>
+      ) : (
+        <div
+          className={joinClasses(
+            'relative grid w-full overflow-hidden rounded-lg border transition-colors',
+            isNumberEditing
+              ? accent === 'input'
+                ? 'border-input'
+                : 'border-output'
+              : 'border-line',
+          )}
+          style={{
+            backgroundColor: 'var(--color-panel)',
+          }}
+        >
+          <div className="relative">
+            <input
+              id={`${idBase}-number`}
+              name={`${idBase}-number`}
+              aria-label={ariaLabel}
+              type="number"
+              min={min}
+              max={max}
+              step={step}
+              value={value}
+              onChange={(event) => onChange(Number(event.target.value))}
+              onFocus={() => setIsNumberEditing(true)}
+              onBlur={() => setIsNumberEditing(false)}
+              className={joinClasses(numberInputClassName(accent), 'pr-10')}
+            />
+            <span className="text-muted pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm">
+              {unit}
+            </span>
+          </div>
+          <input
+            id={idBase}
+            name={idBase}
+            type="range"
+            min={sliderMin}
+            max={sliderMax}
+            step={sliderStep}
+            value={sliderValue}
+            onChange={(event) => {
+              const rawValue = Number(event.target.value);
+
+              onChange(
+                isLogScale
+                  ? antiLogScaleValue(
+                      rawValue,
+                      min,
+                      max,
+                      scaleMin,
+                      scaleMax,
+                      step,
+                    )
+                  : rawValue,
+              );
+            }}
+            className={rangeBarClassName()}
+            style={{
+              background: `linear-gradient(to right, ${fillColor} ${fillPercent}%, var(--color-line) ${fillPercent}%)`,
+            }}
+          />
+        </div>
+      )}
+    </div>
   );
 }
 

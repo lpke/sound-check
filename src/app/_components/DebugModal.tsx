@@ -1,6 +1,13 @@
 'use client';
 
-import { useMemo, useState, type SVGProps } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type SVGProps,
+} from 'react';
 import type { SoundCheckController } from '@/utils/useSoundCheck';
 import { getDeviceLabel } from '@/utils/devices';
 import { joinClasses } from '@/utils/utils';
@@ -57,15 +64,20 @@ const debugMimeTypes = [
   'audio/ogg;codecs=opus',
 ];
 
+const DEBUG_TEXT_REFRESH_MS = 250;
+
 export function DebugModal({ soundCheck }: DebugModalProps) {
   const [includedSections, setIncludedSections] = useState(
     defaultIncludedSections,
   );
   const runtimeInfo = useMemo(() => getRuntimeInfo(), []);
+  const [isDebugTextPaused, setIsDebugTextPaused] = useState(false);
   const [copyState, setCopyState] = useState<'copied' | 'idle' | 'failed'>(
     'idle',
   );
   const [editedDebugText, setEditedDebugText] = useState<string | null>(null);
+  const latestDebugTextRef = useRef('');
+  const [forceRefreshTick, setForceRefreshTick] = useState(0);
 
   const debugText = useMemo(() => {
     const payload: Record<string, unknown> = {
@@ -176,11 +188,54 @@ export function DebugModal({ soundCheck }: DebugModalProps) {
 
     return JSON.stringify(payload, null, 2);
   }, [includedSections, runtimeInfo, soundCheck]);
-  const displayedDebugText = editedDebugText ?? debugText;
+  const [displayedDebugText, setDisplayedDebugText] = useState(debugText);
+
+  useEffect(() => {
+    latestDebugTextRef.current = debugText;
+  }, [debugText]);
+
+  useEffect(() => {
+    if (isDebugTextPaused) {
+      return;
+    }
+
+    if (forceRefreshTick > 0) {
+      setDisplayedDebugText(latestDebugTextRef.current);
+      setForceRefreshTick(0);
+    }
+
+    setDisplayedDebugText(debugText);
+
+    const intervalId = window.setInterval(() => {
+      setDisplayedDebugText(latestDebugTextRef.current);
+    }, DEBUG_TEXT_REFRESH_MS);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [isDebugTextPaused, forceRefreshTick]);
+
+  const shownDebugText = editedDebugText ?? displayedDebugText;
+
+  function handlePauseToggle() {
+    if (isDebugTextPaused) {
+      setEditedDebugText(null);
+      setDisplayedDebugText(latestDebugTextRef.current);
+      setIsDebugTextPaused(false);
+      return;
+    }
+
+    setIsDebugTextPaused(true);
+  }
+
+  function handleDebugTextChange(event: ChangeEvent<HTMLTextAreaElement>) {
+    setEditedDebugText(event.target.value);
+    setIsDebugTextPaused(true);
+  }
 
   async function copyDebugText() {
     try {
-      await navigator.clipboard.writeText(displayedDebugText);
+      await navigator.clipboard.writeText(shownDebugText);
       setCopyState('copied');
       window.setTimeout(() => setCopyState('idle'), 1600);
     } catch {
@@ -214,6 +269,8 @@ export function DebugModal({ soundCheck }: DebugModalProps) {
                   const checked = event.target.checked;
 
                   setEditedDebugText(null);
+                  setIsDebugTextPaused(false);
+                  setForceRefreshTick((current) => current + 1);
                   setIncludedSections((currentSections) => ({
                     ...currentSections,
                     [section.key]: checked,
@@ -229,34 +286,60 @@ export function DebugModal({ soundCheck }: DebugModalProps) {
         </div>
 
         <div className="group/debug-field relative">
-          <button
-            type="button"
-            aria-label="Copy debug JSON"
-            title="Copy debug JSON"
-            onClick={copyDebugText}
+          <div
             className={joinClasses(
-              'absolute top-2 right-2 z-10 inline-flex h-8 w-8 items-center justify-center rounded-md border text-sm opacity-0 transition group-hover/debug-field:opacity-100 focus:opacity-100 focus:outline-none active:translate-y-px active:scale-95',
-              copyState === 'copied'
-                ? 'border-signal/30 bg-signal-soft text-signal'
-                : copyState === 'failed'
-                  ? 'border-danger/30 bg-danger-soft text-danger'
-                  : 'border-line bg-panel/90 text-muted hover:bg-panel hover:text-foreground',
+              'absolute top-2 right-2 z-10 flex items-center gap-2 transition',
+              isDebugTextPaused
+                ? 'opacity-100'
+                : 'opacity-0 group-hover/debug-field:opacity-100 focus-within:opacity-100',
             )}
           >
-            {copyState === 'copied' ? (
-              <CheckIcon aria-hidden="true" className="h-4 w-4" />
-            ) : (
-              <CopyIcon aria-hidden="true" className="h-4 w-4" />
-            )}
-          </button>
+            <button
+              type="button"
+              aria-label={
+                isDebugTextPaused
+                  ? 'Resume debug JSON updates'
+                  : 'Pause debug JSON updates'
+              }
+              title={
+                isDebugTextPaused
+                  ? 'Resume debug JSON updates'
+                  : 'Pause debug JSON updates'
+              }
+              onClick={handlePauseToggle}
+              className="border-line bg-panel/90 hover:bg-panel hover:text-foreground inline-flex h-8 w-16 items-center justify-center rounded-md border px-1.5 text-[10px] font-semibold transition"
+            >
+              {isDebugTextPaused ? 'Resume' : 'Pause'}
+            </button>
+            <button
+              type="button"
+              aria-label="Copy debug JSON"
+              title="Copy debug JSON"
+              onClick={copyDebugText}
+              className={joinClasses(
+                'inline-flex h-8 w-8 items-center justify-center rounded-md border text-sm transition focus:outline-none active:translate-y-px active:scale-95',
+                copyState === 'copied'
+                  ? 'border-signal/30 bg-signal-soft text-signal'
+                  : copyState === 'failed'
+                    ? 'border-danger/30 bg-danger-soft text-danger'
+                    : 'border-line bg-panel/90 text-muted hover:bg-panel hover:text-foreground',
+              )}
+            >
+              {copyState === 'copied' ? (
+                <CheckIcon aria-hidden="true" className="h-4 w-4" />
+              ) : (
+                <CopyIcon aria-hidden="true" className="h-4 w-4" />
+              )}
+            </button>
+          </div>
 
           <textarea
             data-modal-scroll
             aria-label="Editable debug information JSON"
-            value={displayedDebugText}
-            onChange={(event) => setEditedDebugText(event.target.value)}
+            value={shownDebugText}
+            onChange={handleDebugTextChange}
             spellCheck={false}
-            className="border-line bg-panel-soft text-foreground focus:border-control focus:ring-control-soft h-[50svh] min-h-80 w-full resize-y overflow-auto rounded-lg border p-4 pr-12 font-mono text-xs leading-5 outline-none focus:ring-4"
+            className="border-line bg-panel-soft text-foreground focus:border-control focus:ring-control-soft h-[50svh] min-h-80 w-full resize-y overflow-auto rounded-lg border p-4 pr-16 font-mono text-xs leading-5 outline-none focus:ring-4"
           />
         </div>
       </div>

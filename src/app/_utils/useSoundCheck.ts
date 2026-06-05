@@ -2,6 +2,7 @@
 
 import {
   type ChangeEvent,
+  type SetStateAction,
   useCallback,
   useEffect,
   useMemo,
@@ -74,11 +75,22 @@ type RecordedPlaybackState = {
   positionsByClipId: Record<string, number>;
 };
 
+type OutputSlot = 'monitor' | 'music' | 'recording';
+
 export function useSoundCheck() {
-  const outputAudioRef = useRef<HTMLAudioElement | null>(null);
+  const musicPlaybackAudioRef = useRef<HTMLAudioElement | null>(null);
+  const recordedPlaybackAudioRef = useRef<HTMLAudioElement | null>(null);
+  const monitorAudioRef = useRef<HTMLAudioElement | null>(null);
   const inputStreamRef = useRef<MediaStream | null>(null);
   const inputAnalyserRef = useRef<ActiveInputAnalyser | null>(null);
-  const outputGraphRef = useRef<ActiveOutputGraph | null>(null);
+  const musicOutputGraphRef = useRef<ActiveOutputGraph | null>(null);
+  const recordedPlaybackOutputGraphRef = useRef<ActiveOutputGraph | null>(null);
+  const monitorOutputGraphRef = useRef<ActiveOutputGraph | null>(null);
+  const outputSlotLevelsRef = useRef<Record<OutputSlot, number>>({
+    monitor: 0,
+    music: 0,
+    recording: 0,
+  });
   const musicProgressTimerRef = useRef<number | null>(null);
   const recordedProgressTimerRef = useRef<number | null>(null);
   const pendingMusicStartAtRef = useRef<number | null>(null);
@@ -110,7 +122,6 @@ export function useSoundCheck() {
   });
   const [monitorEnabled, setMonitorEnabled] = useState(false);
   const [monitorDelayMs, setMonitorDelayMs] = useState(0);
-  const [routedMode, setRoutedMode] = useState<RoutedMode>('idle');
   const [inputLevel, setInputLevel] = useState(0);
   const [outputLevel, setOutputLevel] = useState(0);
   const [recordedClips, setRecordedClips] = useState<NamedRecordedClip[]>([]);
@@ -120,6 +131,9 @@ export function useSoundCheck() {
       isPlaying: false,
       positionsByClipId: {},
     });
+  const [isMusicOutputActive, setIsMusicOutputActive] = useState(false);
+  const [isRecordingPlaybackActive, setIsRecordingPlaybackActive] =
+    useState(false);
   const [selectedRecordingId, setSelectedRecordingId] = useState<string | null>(
     null,
   );
@@ -158,6 +172,11 @@ export function useSoundCheck() {
     );
   }, [recordedClips, selectedRecordingId]);
 
+  const musicPlaybackMode = isMusicOutputActive ? 'speakerTest' : 'idle';
+  const recordingPlaybackMode = isRecordingPlaybackActive ? 'clip' : 'idle';
+  const activePlaybackMode: Exclude<RoutedMode, 'monitor'> =
+    musicPlaybackMode === 'speakerTest' ? 'speakerTest' : recordingPlaybackMode;
+
   const inputStatus = appPaused
     ? {
         label: 'App is paused. No microphone stream is active.',
@@ -171,6 +190,10 @@ export function useSoundCheck() {
           tone: 'idle' as const,
         }
       : getInputStatus(permissionState, inputLevel);
+  const routedMode: RoutedMode =
+    activePlaybackMode === 'idle' && monitorEnabled
+      ? 'monitor'
+      : activePlaybackMode;
   const outputStatus =
     appPaused || outputMuted
       ? {
@@ -208,7 +231,7 @@ export function useSoundCheck() {
     stopMusicProgressLoop();
 
     const syncMusicPlayback = () => {
-      const activeGraph = outputGraphRef.current;
+      const activeGraph = musicOutputGraphRef.current;
 
       if (!activeGraph?.getCurrentTime) {
         return;
@@ -248,7 +271,7 @@ export function useSoundCheck() {
       stopRecordedProgressLoop();
 
       const syncRecordedPlayback = () => {
-        const activeGraph = outputGraphRef.current;
+        const activeGraph = recordedPlaybackOutputGraphRef.current;
 
         if (!activeGraph?.getCurrentTime) {
           return;
@@ -302,22 +325,76 @@ export function useSoundCheck() {
     setPermissionState('idle');
   }, [stopInputAnalyser]);
 
-  const stopOutputGraph = useCallback(
+  const setOutputSlotLevel = useCallback(
+    (slot: OutputSlot, nextLevel: SetStateAction<number>) => {
+      const computedNextLevel =
+        typeof nextLevel === 'function'
+          ? nextLevel(outputSlotLevelsRef.current[slot])
+          : nextLevel;
+
+      outputSlotLevelsRef.current[slot] = computedNextLevel;
+      setOutputLevel(
+        Math.max(
+          outputSlotLevelsRef.current.monitor,
+          outputSlotLevelsRef.current.music,
+          outputSlotLevelsRef.current.recording,
+        ),
+      );
+    },
+    [],
+  );
+
+  const clearOutputSlotLevel = useCallback(
+    (slot: OutputSlot) => {
+      setOutputSlotLevel(slot, 0);
+    },
+    [setOutputSlotLevel],
+  );
+
+  const stopMusicOutputGraph = useCallback(() => {
+    const activeGraph = musicOutputGraphRef.current;
+
+    stopMusicProgressLoop();
+    musicOutputGraphRef.current = null;
+    setIsMusicOutputActive(false);
+
+    if (activeGraph) {
+      activeGraph.cancel();
+      activeGraph.context.close().catch(() => undefined);
+    }
+
+    const outputAudio = musicPlaybackAudioRef.current;
+    if (outputAudio) {
+      outputAudio.pause();
+      outputAudio.srcObject = null;
+      outputAudio.removeAttribute('src');
+      outputAudio.load();
+    }
+
+    clearOutputSlotLevel('music');
+    setMusicPlayback((currentPlayback) => ({
+      ...currentPlayback,
+      isPlaying: false,
+      positionSeconds: 0,
+    }));
+  }, [clearOutputSlotLevel, stopMusicProgressLoop]);
+
+  const stopRecordedPlaybackOutputGraph = useCallback(
     ({
       resetRecordedPosition = false,
     }: { resetRecordedPosition?: boolean } = {}) => {
-      const activeGraph = outputGraphRef.current;
+      const activeGraph = recordedPlaybackOutputGraphRef.current;
 
-      stopMusicProgressLoop();
       stopRecordedProgressLoop();
-      outputGraphRef.current = null;
+      recordedPlaybackOutputGraphRef.current = null;
+      setIsRecordingPlaybackActive(false);
 
       if (activeGraph) {
         activeGraph.cancel();
         activeGraph.context.close().catch(() => undefined);
       }
 
-      const outputAudio = outputAudioRef.current;
+      const outputAudio = recordedPlaybackAudioRef.current;
       if (outputAudio) {
         outputAudio.pause();
         outputAudio.srcObject = null;
@@ -325,20 +402,12 @@ export function useSoundCheck() {
         outputAudio.load();
       }
 
-      setOutputLevel(0);
-      setMusicPlayback((currentPlayback) => ({
-        ...currentPlayback,
-        isPlaying: false,
-        positionSeconds: 0,
-      }));
+      clearOutputSlotLevel('recording');
       setRecordedPlayback((currentPlayback) => {
         const activeClipId = currentPlayback.activeClipId;
 
         if (!activeClipId) {
-          return {
-            ...currentPlayback,
-            isPlaying: false,
-          };
+          return { ...currentPlayback, isPlaying: false };
         }
 
         const durationSeconds = activeGraph?.durationSeconds ?? 0;
@@ -348,7 +417,6 @@ export function useSoundCheck() {
 
         return {
           ...currentPlayback,
-          activeClipId: null,
           isPlaying: false,
           positionsByClipId: {
             ...currentPlayback.positionsByClipId,
@@ -356,9 +424,50 @@ export function useSoundCheck() {
           },
         };
       });
-      setRoutedMode('idle');
     },
-    [stopMusicProgressLoop, stopRecordedProgressLoop],
+    [clearOutputSlotLevel, stopRecordedProgressLoop],
+  );
+
+  const stopPlaybackOutputGraph = useCallback(
+    ({
+      resetRecordedPosition = false,
+    }: { resetRecordedPosition?: boolean } = {}) => {
+      stopMusicOutputGraph();
+      stopRecordedPlaybackOutputGraph({ resetRecordedPosition });
+    },
+    [stopMusicOutputGraph, stopRecordedPlaybackOutputGraph],
+  );
+
+  const stopMonitorOutputGraph = useCallback(() => {
+    const activeGraph = monitorOutputGraphRef.current;
+
+    monitorOutputGraphRef.current = null;
+    setMonitorEnabled(false);
+
+    if (activeGraph) {
+      activeGraph.cancel();
+      activeGraph.context.close().catch(() => undefined);
+    }
+
+    const outputAudio = monitorAudioRef.current;
+    if (outputAudio) {
+      outputAudio.pause();
+      outputAudio.srcObject = null;
+      outputAudio.removeAttribute('src');
+      outputAudio.load();
+    }
+
+    clearOutputSlotLevel('monitor');
+  }, [clearOutputSlotLevel]);
+
+  const stopOutputGraph = useCallback(
+    ({
+      resetRecordedPosition = false,
+    }: { resetRecordedPosition?: boolean } = {}) => {
+      stopPlaybackOutputGraph({ resetRecordedPosition });
+      stopMonitorOutputGraph();
+    },
+    [stopMonitorOutputGraph, stopPlaybackOutputGraph],
   );
 
   const refreshDevices = useCallback(async () => {
@@ -508,7 +617,10 @@ export function useSoundCheck() {
   }, [appPaused, inputMuted, startRecorder]);
 
   const routeStreamToOutput = useCallback(
-    async (stream: MediaStream) => {
+    async (
+      outputAudio: HTMLAudioElement | null,
+      stream: MediaStream,
+    ): Promise<void> => {
       if (appPaused || outputMuted) {
         throw new Error(
           outputMuted
@@ -516,8 +628,6 @@ export function useSoundCheck() {
             : 'Resume the app before playing audio.',
         );
       }
-
-      const outputAudio = outputAudioRef.current;
 
       if (!outputAudio) {
         throw new Error('Output player is not ready.');
@@ -533,6 +643,24 @@ export function useSoundCheck() {
     [appPaused, outputMuted, selectedOutputId],
   );
 
+  const routePlaybackStreamToOutput = useCallback(
+    (stream: MediaStream) =>
+      routeStreamToOutput(musicPlaybackAudioRef.current, stream),
+    [routeStreamToOutput],
+  );
+
+  const routeRecordedPlaybackStreamToOutput = useCallback(
+    (stream: MediaStream) =>
+      routeStreamToOutput(recordedPlaybackAudioRef.current, stream),
+    [routeStreamToOutput],
+  );
+
+  const routeMonitorStreamToOutput = useCallback(
+    (stream: MediaStream) =>
+      routeStreamToOutput(monitorAudioRef.current, stream),
+    [routeStreamToOutput],
+  );
+
   const startSpeakerTest = useCallback(async () => {
     if (appPaused || outputMuted) {
       setStatusMessage(
@@ -544,8 +672,7 @@ export function useSoundCheck() {
     }
 
     setErrorMessage('');
-    setMonitorEnabled(false);
-    stopOutputGraph();
+    stopMusicOutputGraph();
 
     try {
       if (speakerTestSettings.kind === 'music') {
@@ -562,7 +689,7 @@ export function useSoundCheck() {
           return;
         }
 
-        outputGraphRef.current = await createMusicOutputGraph({
+        musicOutputGraphRef.current = await createMusicOutputGraph({
           getArrayBuffer: async () => {
             if (speakerTestSettings.musicSource === 'file') {
               return (
@@ -581,58 +708,59 @@ export function useSoundCheck() {
 
             return response.arrayBuffer();
           },
-          onEnded: stopOutputGraph,
-          routeStreamToOutput,
-          setOutputLevel,
+          onEnded: stopMusicOutputGraph,
+          routeStreamToOutput: routePlaybackStreamToOutput,
+          setOutputLevel: (nextLevel) => setOutputSlotLevel('music', nextLevel),
           startAtSeconds,
         });
+        setIsMusicOutputActive(true);
         setMusicPlayback((currentPlayback) => ({
           ...currentPlayback,
           durationSeconds:
-            outputGraphRef.current?.durationSeconds ??
+            musicOutputGraphRef.current?.durationSeconds ??
             currentPlayback.durationSeconds,
           isPlaying: true,
           positionSeconds: clamp(
             startAtSeconds,
             0,
-            outputGraphRef.current?.durationSeconds ??
+            musicOutputGraphRef.current?.durationSeconds ??
               currentPlayback.durationSeconds,
           ),
         }));
         startMusicProgressLoop();
       } else {
-        outputGraphRef.current = await createSpeakerTestOutputGraph({
+        musicOutputGraphRef.current = await createSpeakerTestOutputGraph({
           kind: speakerTestSettings.kind,
-          onEnded: stopOutputGraph,
-          routeStreamToOutput,
-          setOutputLevel,
+          routeStreamToOutput: routePlaybackStreamToOutput,
+          setOutputLevel: (nextLevel) => setOutputSlotLevel('music', nextLevel),
           toneFrequency: speakerTestSettings.toneFrequency,
         });
+        setIsMusicOutputActive(true);
       }
 
-      setRoutedMode('speakerTest');
       setStatusMessage(
         speakerTestSettings.kind === 'music'
           ? `Playing music on ${selectedOutputName}.`
           : `Playing test sound on ${selectedOutputName}.`,
       );
     } catch (error) {
-      stopOutputGraph();
+      stopMusicOutputGraph();
       setErrorMessage(toErrorMessage(error));
     }
   }, [
     appPaused,
     outputMuted,
     musicPlayback.positionSeconds,
-    routeStreamToOutput,
     selectedOutputName,
     speakerTestSettings,
     startMusicProgressLoop,
-    stopOutputGraph,
+    stopMusicOutputGraph,
+    routePlaybackStreamToOutput,
+    setOutputSlotLevel,
   ]);
 
   const pauseMusicPlayback = useCallback(() => {
-    const activeGraph = outputGraphRef.current;
+    const activeGraph = musicOutputGraphRef.current;
 
     if (!activeGraph?.pause) {
       return;
@@ -663,7 +791,7 @@ export function useSoundCheck() {
       return;
     }
 
-    const activeGraph = outputGraphRef.current;
+    const activeGraph = musicOutputGraphRef.current;
 
     if (activeGraph?.playFrom) {
       activeGraph.playFrom(musicPlayback.positionSeconds);
@@ -698,7 +826,7 @@ export function useSoundCheck() {
 
   const handleMusicSeek = useCallback(
     (positionSeconds: number) => {
-      const activeGraph = outputGraphRef.current;
+      const activeGraph = musicOutputGraphRef.current;
       const durationSeconds =
         activeGraph?.durationSeconds ?? musicPlayback.durationSeconds;
       const nextPosition = clamp(positionSeconds, 0, durationSeconds || 0);
@@ -732,7 +860,7 @@ export function useSoundCheck() {
   );
 
   const markMusicPosition = useCallback(() => {
-    const activeGraph = outputGraphRef.current;
+    const activeGraph = musicOutputGraphRef.current;
     const durationSeconds =
       activeGraph?.durationSeconds ?? musicPlayback.durationSeconds;
     const positionSeconds = clamp(
@@ -753,7 +881,7 @@ export function useSoundCheck() {
       return;
     }
 
-    const activeGraph = outputGraphRef.current;
+    const activeGraph = musicOutputGraphRef.current;
 
     if (activeGraph?.playFrom) {
       activeGraph.playFrom(musicPlayback.markSeconds);
@@ -793,26 +921,25 @@ export function useSoundCheck() {
     }
 
     setErrorMessage('');
-    stopOutputGraph();
+    stopMonitorOutputGraph();
 
     try {
       const stream = await ensureInputStream();
-      outputGraphRef.current = await createMonitorOutputGraph({
+      monitorOutputGraphRef.current = await createMonitorOutputGraph({
         delayMs: monitorDelayMs,
-        routeStreamToOutput,
-        setOutputLevel,
+        routeStreamToOutput: routeMonitorStreamToOutput,
+        setOutputLevel: (nextLevel) => setOutputSlotLevel('monitor', nextLevel),
         stream,
       });
 
       setMonitorEnabled(true);
-      setRoutedMode('monitor');
       setStatusMessage(
         monitorDelayMs === 0
           ? `Live monitor routed to ${selectedOutputName}.`
           : `Delayed monitor routed to ${selectedOutputName}.`,
       );
     } catch (error) {
-      stopOutputGraph();
+      stopMonitorOutputGraph();
       setMonitorEnabled(false);
       setErrorMessage(toErrorMessage(error));
     }
@@ -822,16 +949,16 @@ export function useSoundCheck() {
     ensureInputStream,
     monitorDelayMs,
     outputMuted,
-    routeStreamToOutput,
+    routeMonitorStreamToOutput,
     selectedOutputName,
-    stopOutputGraph,
+    stopMonitorOutputGraph,
+    setOutputSlotLevel,
   ]);
 
   const stopMonitor = useCallback(() => {
-    setMonitorEnabled(false);
-    stopOutputGraph();
+    stopMonitorOutputGraph();
     setStatusMessage('Monitor stopped.');
-  }, [stopOutputGraph]);
+  }, [stopMonitorOutputGraph]);
 
   const toggleInputMute = useCallback(() => {
     if (inputMuted) {
@@ -842,14 +969,19 @@ export function useSoundCheck() {
     }
 
     stopRecording();
-    setMonitorEnabled(false);
-    if (routedMode === 'monitor') {
-      stopOutputGraph();
+    if (monitorEnabled) {
+      stopMonitorOutputGraph();
     }
     stopInputStream();
     setInputMuted(true);
     setStatusMessage('Microphone section muted. Input stopped.');
-  }, [inputMuted, routedMode, stopInputStream, stopOutputGraph, stopRecording]);
+  }, [
+    inputMuted,
+    monitorEnabled,
+    stopInputStream,
+    stopMonitorOutputGraph,
+    stopRecording,
+  ]);
 
   const toggleOutputMute = useCallback(() => {
     if (outputMuted) {
@@ -919,21 +1051,22 @@ export function useSoundCheck() {
       );
 
       setErrorMessage('');
-      setMonitorEnabled(false);
       setSelectedRecordingId(clip.id);
-      stopOutputGraph();
+      stopRecordedPlaybackOutputGraph();
 
       try {
-        outputGraphRef.current = await createClipOutputGraph({
+        recordedPlaybackOutputGraphRef.current = await createClipOutputGraph({
           blob: clip.blob,
           onEnded: () =>
-            stopOutputGraph({
+            stopRecordedPlaybackOutputGraph({
               resetRecordedPosition: true,
             }),
-          routeStreamToOutput,
-          setOutputLevel,
+          routeStreamToOutput: routeRecordedPlaybackStreamToOutput,
+          setOutputLevel: (nextLevel) =>
+            setOutputSlotLevel('recording', nextLevel),
           startAtSeconds,
         });
+        setIsRecordingPlaybackActive(true);
         setRecordedPlayback((currentPlayback) => ({
           ...currentPlayback,
           activeClipId: clip.id,
@@ -943,15 +1076,15 @@ export function useSoundCheck() {
             [clip.id]: clamp(
               startAtSeconds,
               0,
-              outputGraphRef.current?.durationSeconds ?? clip.durationSeconds,
+              recordedPlaybackOutputGraphRef.current?.durationSeconds ??
+                clip.durationSeconds,
             ),
           },
         }));
         startRecordedProgressLoop(clip.id);
-        setRoutedMode('clip');
         setStatusMessage(`Playing recording on ${selectedOutputName}.`);
       } catch (error) {
-        stopOutputGraph();
+        stopRecordedPlaybackOutputGraph();
         setErrorMessage(toErrorMessage(error));
       }
     },
@@ -960,17 +1093,18 @@ export function useSoundCheck() {
       outputMuted,
       recordedClips,
       recordedPlayback.positionsByClipId,
-      routeStreamToOutput,
+      routeRecordedPlaybackStreamToOutput,
       selectedOutputName,
       selectedRecordedClip,
       startRecordedProgressLoop,
-      stopOutputGraph,
+      setOutputSlotLevel,
+      stopRecordedPlaybackOutputGraph,
     ],
   );
 
   const pauseRecordedClip = useCallback(() => {
     const activeClipId = recordedPlayback.activeClipId;
-    const activeGraph = outputGraphRef.current;
+    const activeGraph = recordedPlaybackOutputGraphRef.current;
 
     if (!activeClipId || !activeGraph?.pause) {
       return;
@@ -1013,7 +1147,7 @@ export function useSoundCheck() {
         return;
       }
 
-      const activeGraph = outputGraphRef.current;
+      const activeGraph = recordedPlaybackOutputGraphRef.current;
       const positionSeconds = recordedPlayback.positionsByClipId[clipId] ?? 0;
 
       if (recordedPlayback.activeClipId === clipId && activeGraph?.playFrom) {
@@ -1024,7 +1158,6 @@ export function useSoundCheck() {
           isPlaying: true,
         }));
         startRecordedProgressLoop(clipId);
-        setRoutedMode('clip');
         setStatusMessage(`Playing recording on ${selectedOutputName}.`);
         return;
       }
@@ -1072,8 +1205,11 @@ export function useSoundCheck() {
 
       const nextPosition = clamp(positionSeconds, 0, clip.durationSeconds);
       const isActiveClip =
-        recordedPlayback.activeClipId === clipId && routedMode === 'clip';
-      const activeGraph = isActiveClip ? outputGraphRef.current : null;
+        recordedPlayback.activeClipId === clipId &&
+        recordedPlaybackOutputGraphRef.current !== null;
+      const activeGraph = isActiveClip
+        ? recordedPlaybackOutputGraphRef.current
+        : null;
       const wasPlaying = activeGraph?.isPaused
         ? !activeGraph.isPaused()
         : isActiveClip && recordedPlayback.isPlaying;
@@ -1103,7 +1239,6 @@ export function useSoundCheck() {
       recordedClips,
       recordedPlayback.activeClipId,
       recordedPlayback.isPlaying,
-      routedMode,
       startRecordedProgressLoop,
       stopRecordedProgressLoop,
     ],
@@ -1294,14 +1429,13 @@ export function useSoundCheck() {
   const handleInputChange = useCallback(
     (event: ChangeEvent<HTMLSelectElement>) => {
       if (monitorEnabled) {
-        setMonitorEnabled(false);
-        stopOutputGraph();
+        stopMonitorOutputGraph();
         setStatusMessage('Monitor stopped after input change.');
       }
 
       setSelectedInputId(event.target.value);
     },
-    [monitorEnabled, stopOutputGraph],
+    [monitorEnabled, stopMonitorOutputGraph],
   );
 
   const handleOutputChange = useCallback(
@@ -1313,8 +1447,8 @@ export function useSoundCheck() {
 
   const handleSpeakerTestKindChange = useCallback(
     (kind: SpeakerTestKind) => {
-      if (routedMode === 'speakerTest') {
-        stopOutputGraph();
+      if (musicOutputGraphRef.current?.mode === 'speakerTest') {
+        stopMusicOutputGraph();
       }
 
       setSpeakerTestSettings((currentSettings) => ({
@@ -1330,20 +1464,31 @@ export function useSoundCheck() {
         }));
       }
     },
-    [routedMode, stopOutputGraph],
+    [stopMusicOutputGraph],
   );
 
   const handleSpeakerToneFrequencyChange = useCallback((frequency: number) => {
+    const nextFrequency = clamp(frequency, 40, 12000);
+    const activeGraph = musicOutputGraphRef.current;
+
     setSpeakerTestSettings((currentSettings) => ({
       ...currentSettings,
-      toneFrequency: clamp(frequency, 40, 12000),
+      toneFrequency: nextFrequency,
     }));
+
+    if (
+      activeGraph?.mode === 'speakerTest' &&
+      activeGraph.updateToneFrequency
+    ) {
+      activeGraph.updateToneFrequency(nextFrequency);
+      return;
+    }
   }, []);
 
   const handleSpeakerMusicSourceChange = useCallback(
     (musicSource: SpeakerMusicSource) => {
-      if (routedMode === 'speakerTest') {
-        stopOutputGraph();
+      if (musicOutputGraphRef.current?.mode === 'speakerTest') {
+        stopMusicOutputGraph();
       }
 
       setSpeakerTestSettings((currentSettings) => ({
@@ -1358,13 +1503,13 @@ export function useSoundCheck() {
         positionSeconds: 0,
       }));
     },
-    [routedMode, stopOutputGraph],
+    [stopMusicOutputGraph],
   );
 
   const handleSpeakerMusicFileChange = useCallback(
     (musicFile: File | null) => {
-      if (routedMode === 'speakerTest') {
-        stopOutputGraph();
+      if (musicOutputGraphRef.current?.mode === 'speakerTest') {
+        stopMusicOutputGraph();
       }
 
       setSpeakerTestSettings((currentSettings) => ({
@@ -1380,27 +1525,25 @@ export function useSoundCheck() {
         positionSeconds: 0,
       }));
     },
-    [routedMode, stopOutputGraph],
+    [stopMusicOutputGraph],
   );
 
   const handleProcessingEnabledChange = useCallback(
     (enabled: boolean) => {
       if (monitorEnabled) {
-        setMonitorEnabled(false);
-        stopOutputGraph();
+        stopMonitorOutputGraph();
         setStatusMessage('Monitor stopped after processing change.');
       }
 
       setProcessingEnabled(enabled);
     },
-    [monitorEnabled, stopOutputGraph],
+    [monitorEnabled, stopMonitorOutputGraph],
   );
 
   const handleProcessingSettingChange = useCallback(
     (setting: ProcessingSettingKey, enabled: boolean) => {
       if (monitorEnabled) {
-        setMonitorEnabled(false);
-        stopOutputGraph();
+        stopMonitorOutputGraph();
         setStatusMessage('Monitor stopped after processing change.');
       }
 
@@ -1409,14 +1552,14 @@ export function useSoundCheck() {
         [setting]: enabled,
       }));
     },
-    [monitorEnabled, stopOutputGraph],
+    [monitorEnabled, stopMonitorOutputGraph],
   );
 
   const handleDelayChange = useCallback((nextDelayMs: number) => {
     const boundedDelay = clamp(nextDelayMs, 0, MAX_MONITOR_DELAY_MS);
 
     setMonitorDelayMs(boundedDelay);
-    outputGraphRef.current?.updateDelay?.(boundedDelay / 1000);
+    monitorOutputGraphRef.current?.updateDelay?.(boundedDelay / 1000);
   }, []);
 
   useEffect(() => {
@@ -1497,16 +1640,22 @@ export function useSoundCheck() {
   ]);
 
   useEffect(() => {
-    const outputAudio = outputAudioRef.current;
+    window.queueMicrotask(() => {
+      const outputAudioElements = [
+        musicPlaybackAudioRef.current,
+        recordedPlaybackAudioRef.current,
+        monitorAudioRef.current,
+      ].filter(Boolean);
 
-    if (!outputAudio || routedMode === 'idle') {
-      return;
-    }
-
-    applySink(outputAudio, selectedOutputId).catch((error) => {
-      setErrorMessage(toErrorMessage(error));
+      outputAudioElements.forEach((outputAudio) => {
+        if (outputAudio) {
+          applySink(outputAudio, selectedOutputId).catch((error) => {
+            setErrorMessage(toErrorMessage(error));
+          });
+        }
+      });
     });
-  }, [routedMode, selectedOutputId]);
+  }, [selectedOutputId]);
 
   useEffect(() => {
     return () => {
@@ -1578,6 +1727,8 @@ export function useSoundCheck() {
     requestOutputAccess,
     handleInputChange,
     handleOutputChange,
+    stopPlaybackOutput: stopMusicOutputGraph,
+    stopRecordedPlaybackOutput: stopRecordedPlaybackOutputGraph,
     handleSpeakerMusicFileChange,
     handleSpeakerMusicSourceChange,
     handleSpeakerTestKindChange,
@@ -1588,7 +1739,9 @@ export function useSoundCheck() {
   };
 
   return {
-    audioRef: outputAudioRef,
+    audioRef: musicPlaybackAudioRef,
+    recordedPlaybackAudioRef,
+    monitorAudioRef,
     controller,
   };
 }

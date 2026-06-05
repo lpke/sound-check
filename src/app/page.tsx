@@ -3,21 +3,22 @@
 import {
   InputSection,
   OutputSection,
-  SiteHeader,
   UnsupportedPanel,
+  SiteFooter,
 } from '@/components/panels';
 import { useSoundCheck } from '@/utils/useSoundCheck';
 
 export default function HomePage() {
-  const { audioRef, controller } = useSoundCheck();
+  const { audioRef, monitorAudioRef, recordedPlaybackAudioRef, controller } =
+    useSoundCheck();
 
   return (
     <main className="bg-background text-foreground min-h-screen">
       <audio ref={audioRef} className="hidden" playsInline />
+      <audio ref={recordedPlaybackAudioRef} className="hidden" playsInline />
+      <audio ref={monitorAudioRef} className="hidden" playsInline />
 
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-5 sm:px-6 lg:px-8">
-        <SiteHeader soundCheck={controller} />
-
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 pt-8 pb-5 sm:px-6 lg:px-8">
         {!controller.isSupported ? (
           <UnsupportedPanel />
         ) : (
@@ -26,16 +27,15 @@ export default function HomePage() {
               <InputSection soundCheck={controller} />
               <OutputSection soundCheck={controller} />
             </section>
-            <div className="flex justify-start pt-2">
-              <button
-                type="button"
-                onClick={controller.requestPermissionSync}
-                className="text-muted/70 hover:text-muted text-sm underline underline-offset-2 transition focus:outline-none"
-              >
-                Recheck permission and refresh devices
-              </button>
-            </div>
           </>
+        )}
+        {controller.isSupported ? (
+          <SiteFooter
+            soundCheck={controller}
+            onRecheckPermission={controller.requestPermissionSync}
+          />
+        ) : (
+          <SiteFooter soundCheck={controller} />
         )}
       </div>
     </main>

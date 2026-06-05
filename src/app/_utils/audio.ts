@@ -58,13 +58,11 @@ export async function createInputAnalyser(
 
 export async function createSpeakerTestOutputGraph({
   kind,
-  onEnded,
   routeStreamToOutput,
   setOutputLevel,
   toneFrequency,
 }: {
   kind: Exclude<SpeakerTestKind, 'music'>;
-  onEnded: () => void;
   routeStreamToOutput: (stream: MediaStream) => Promise<void>;
   setOutputLevel: LevelSetter;
   toneFrequency: number;
@@ -76,10 +74,6 @@ export async function createSpeakerTestOutputGraph({
   const modulationGain = context.createGain();
   const analyser = context.createAnalyser();
   const destination = context.createMediaStreamDestination();
-  const durationSeconds =
-    kind === 'sweep' ? 8 : kind === 'modulatedTone' ? 6 : 3;
-  const durationMs =
-    kind === 'sweep' ? 8000 : kind === 'modulatedTone' ? 6000 : 3000;
   const frequency = clamp(toneFrequency, 40, 12000);
 
   analyser.fftSize = 1024;
@@ -99,7 +93,18 @@ export async function createSpeakerTestOutputGraph({
   await warmOutputPipeline();
 
   const startAt = context.currentTime + SOURCE_START_DELAY_SECONDS;
-  const stopAt = startAt + durationSeconds;
+  const setToneFrequency = (nextFrequency: number) => {
+    const safeFrequency = clamp(nextFrequency, 40, 12000);
+
+    oscillator.frequency.setValueAtTime(safeFrequency, context.currentTime);
+
+    if (kind === 'modulatedTone') {
+      modulationGain.gain.setValueAtTime(
+        safeFrequency * 0.06,
+        context.currentTime,
+      );
+    }
+  };
 
   oscillator.frequency.setValueAtTime(frequency, startAt);
 
@@ -111,33 +116,27 @@ export async function createSpeakerTestOutputGraph({
   if (kind === 'sweep') {
     oscillator.frequency.exponentialRampToValueAtTime(
       clamp(frequency * 4, 160, 12000),
-      stopAt,
+      startAt + 8,
     );
   }
 
   gain.gain.setValueAtTime(0, startAt);
   gain.gain.linearRampToValueAtTime(0.18, startAt + 0.025);
-  gain.gain.setValueAtTime(0.18, Math.max(startAt, stopAt - 0.035));
-  gain.gain.linearRampToValueAtTime(0, stopAt);
 
   oscillator.start(startAt);
-  oscillator.stop(stopAt);
   if (kind === 'modulatedTone') {
     modulation.start(startAt);
-    modulation.stop(stopAt);
   }
 
   const cancelLevelLoop = startLevelLoop(analyser, setOutputLevel);
-  const stopTimer = window.setTimeout(
-    onEnded,
-    durationMs + SOURCE_START_DELAY_SECONDS * 1000 + 80,
-  );
 
   return {
     context,
     mode: 'speakerTest',
+    updateToneFrequency: (nextFrequency) => {
+      setToneFrequency(nextFrequency);
+    },
     cancel: () => {
-      window.clearTimeout(stopTimer);
       cancelLevelLoop();
       try {
         oscillator.stop();
