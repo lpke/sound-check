@@ -160,7 +160,7 @@ export function LevelMeter({
   const boundedLevel = clamp(level, 0, 1);
   const [peakLevel, setPeakLevel] = useState(0);
   const [isPeakVisible, setIsPeakVisible] = useState(false);
-  const [isSpectrumVisible, setIsSpectrumVisible] = useState(false);
+  const [isSpectrumVisible, setIsSpectrumVisible] = useState(true);
   const latestLevelRef = useRef(boundedLevel);
   const fadeTimerRef = useRef<number | null>(null);
   const dropTimerRef = useRef<number | null>(null);
