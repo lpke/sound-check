@@ -207,6 +207,8 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
                 </Field>
                 <div className="grid grid-cols-[1fr_auto] gap-2">
                   <input
+                    id="speaker-test-frequency-number"
+                    name="speaker-test-frequency-number"
                     aria-label="Tone frequency in hertz"
                     type="number"
                     min={40}
@@ -372,6 +374,8 @@ function SectionHeader({
           />
         ) : null}
         <select
+          id={`${deviceKind}-device`}
+          name={`${deviceKind}-device`}
           aria-label={selectLabel}
           disabled={!canChangeDevice}
           title={visibleDeviceName}
@@ -450,8 +454,9 @@ function ProcessingBlock({ soundCheck }: SoundCheckProps) {
         <ProcessingOption
           checked={soundCheck.processingSettings.echoCancellation}
           disabled={!soundCheck.processingEnabled}
-          label="Echo cancellation"
           description="Reduces speaker feedback and room echo before this app receives the mic."
+          id="processing-echo-cancellation"
+          label="Echo cancellation"
           onChange={(checked) =>
             soundCheck.handleProcessingSettingChange(
               'echoCancellation',
@@ -462,8 +467,9 @@ function ProcessingBlock({ soundCheck }: SoundCheckProps) {
         <ProcessingOption
           checked={soundCheck.processingSettings.noiseSuppression}
           disabled={!soundCheck.processingEnabled}
-          label="Noise suppression"
           description="Filters steady background noise before monitoring or recording."
+          id="processing-noise-suppression"
+          label="Noise suppression"
           onChange={(checked) =>
             soundCheck.handleProcessingSettingChange(
               'noiseSuppression',
@@ -474,8 +480,9 @@ function ProcessingBlock({ soundCheck }: SoundCheckProps) {
         <ProcessingOption
           checked={soundCheck.processingSettings.autoGainControl}
           disabled={!soundCheck.processingEnabled}
-          label="Auto gain"
           description="Lets the browser raise or lower microphone volume automatically."
+          id="processing-auto-gain"
+          label="Auto gain"
           onChange={(checked) =>
             soundCheck.handleProcessingSettingChange('autoGainControl', checked)
           }
@@ -489,18 +496,22 @@ function ProcessingOption({
   checked,
   description,
   disabled,
+  id,
   label,
   onChange,
 }: {
   checked: boolean;
   description: string;
   disabled: boolean;
+  id: string;
   label: string;
   onChange: (checked: boolean) => void;
 }) {
   return (
     <label className="grid grid-cols-[auto_minmax(0,1fr)] gap-3">
       <input
+        id={id}
+        name={id}
         type="checkbox"
         checked={checked}
         disabled={disabled}
@@ -581,15 +592,7 @@ function LiveMonitorBlock({ soundCheck }: SoundCheckProps) {
 function RecordingCapture({ soundCheck }: SoundCheckProps) {
   return (
     <SettingsGroup title="Record input">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-muted font-mono text-xs">
-          {soundCheck.isRecording
-            ? formatSeconds(soundCheck.recordingSeconds)
-            : soundCheck.recordedClip
-              ? formatSeconds(soundCheck.recordedClip.durationSeconds)
-              : '00:00.0'}
-        </p>
-
+      <div className="flex flex-wrap items-center justify-between gap-2">
         {soundCheck.isRecording ? (
           <Button variant="danger" onClick={soundCheck.stopRecording}>
             Stop recording
@@ -602,6 +605,14 @@ function RecordingCapture({ soundCheck }: SoundCheckProps) {
             Record input
           </Button>
         )}
+
+        <p className="text-muted font-mono text-xs">
+          {soundCheck.isRecording
+            ? formatSeconds(soundCheck.recordingSeconds)
+            : soundCheck.recordedClip
+              ? formatSeconds(soundCheck.recordedClip.durationSeconds)
+              : '00:00.0'}
+        </p>
       </div>
     </SettingsGroup>
   );
@@ -612,34 +623,162 @@ function RecordingPlayback({ soundCheck }: SoundCheckProps) {
     <SettingsGroup
       title="Recorded playback"
       description={
-        soundCheck.recordedClip
-          ? `${soundCheck.recordedClip.mimeType || 'audio'} clip ready.`
+        soundCheck.recordedClips.length
+          ? `${soundCheck.recordedClips.length} clips ready.`
           : 'No clip recorded.'
       }
     >
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant="outputSecondary"
-          onClick={soundCheck.playRecordedClip}
-          disabled={
-            soundCheck.appPaused ||
-            soundCheck.outputMuted ||
-            !soundCheck.recordedClip ||
-            soundCheck.routedMode === 'clip'
-          }
-        >
-          Play recording
-        </Button>
-        {soundCheck.routedMode === 'clip' ? (
-          <Button
-            variant="outputSecondary"
-            onClick={soundCheck.stopOutputGraph}
-          >
-            Stop
-          </Button>
-        ) : null}
+      <div className="grid gap-2">
+        {soundCheck.recordedClips.length === 0 ? (
+          <p className="text-muted text-sm">No recordings yet.</p>
+        ) : (
+          soundCheck.recordedClips.map((clip) => {
+            const isActive =
+              soundCheck.recordedPlayback.activeClipId === clip.id;
+            const isPlaying = isActive && soundCheck.recordedPlayback.isPlaying;
+            const positionSeconds =
+              soundCheck.recordedPlayback.positionsByClipId[clip.id] ?? 0;
+            const recordingName = clip.name || 'Recording';
+
+            return (
+              <div
+                key={clip.id}
+                className={joinClasses(
+                  'border-line bg-panel grid gap-3 rounded-lg border p-3',
+                  isActive && 'border-output/45 bg-output-soft/30',
+                )}
+              >
+                <AudioPlaybackControls
+                  buttonLabel={
+                    isPlaying
+                      ? `Pause ${recordingName}`
+                      : `Play ${recordingName}`
+                  }
+                  canUseTransport={
+                    !soundCheck.appPaused &&
+                    !soundCheck.outputMuted &&
+                    clip.durationSeconds > 0
+                  }
+                  durationSeconds={clip.durationSeconds}
+                  isPlaying={isPlaying}
+                  onSeek={(nextPosition) => {
+                    soundCheck.selectRecordedClip(clip.id);
+                    soundCheck.handleRecordedClipSeek(clip.id, nextPosition);
+                  }}
+                  onToggle={() => {
+                    soundCheck.selectRecordedClip(clip.id);
+                    soundCheck.toggleRecordedClipPlayback(clip.id);
+                  }}
+                  positionSeconds={positionSeconds}
+                  seekLabel={`${recordingName} playback position`}
+                  seekName={`recorded-clip-position-${clip.id}`}
+                >
+                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                    <input
+                      id={`recorded-clip-name-${clip.id}`}
+                      name={`recorded-clip-name-${clip.id}`}
+                      type="text"
+                      value={clip.name}
+                      onChange={(event) =>
+                        soundCheck.renameRecordedClip(
+                          clip.id,
+                          event.target.value,
+                        )
+                      }
+                      onFocus={() => soundCheck.selectRecordedClip(clip.id)}
+                      onPointerDown={() =>
+                        soundCheck.selectRecordedClip(clip.id)
+                      }
+                      placeholder="Recording"
+                      aria-label="Rename recording"
+                      title="Rename recording"
+                      className="border-line bg-panel text-foreground focus:border-output focus:ring-output-soft h-10 min-w-0 rounded-lg border px-3 text-sm transition outline-none focus:ring-4"
+                    />
+                    <span
+                      className="text-muted truncate text-xs"
+                      title={clip.inputDeviceName}
+                    >
+                      {clip.inputDeviceName}
+                    </span>
+                  </div>
+                </AudioPlaybackControls>
+              </div>
+            );
+          })
+        )}
       </div>
     </SettingsGroup>
+  );
+}
+
+function AudioPlaybackControls({
+  buttonLabel,
+  canUseTransport,
+  children,
+  durationSeconds,
+  isPlaying,
+  onSeek,
+  onToggle,
+  positionSeconds,
+  seekLabel,
+  seekName,
+}: {
+  buttonLabel: string;
+  canUseTransport: boolean;
+  children?: ReactNode;
+  durationSeconds: number;
+  isPlaying: boolean;
+  onSeek: (positionSeconds: number) => void;
+  onToggle: () => void;
+  positionSeconds: number;
+  seekLabel: string;
+  seekName: string;
+}) {
+  const hasDuration = durationSeconds > 0;
+  const boundedPosition = hasDuration
+    ? clamp(positionSeconds, 0, durationSeconds)
+    : 0;
+
+  return (
+    <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
+      <button
+        type="button"
+        aria-label={buttonLabel}
+        title={buttonLabel}
+        onClick={onToggle}
+        disabled={!canUseTransport}
+        className="bg-output text-on-control hover:bg-output/90 flex h-12 w-12 shrink-0 items-center justify-center rounded-full shadow-[0_8px_22px_rgba(26,89,168,0.2)] transition focus:outline-none active:translate-y-px active:scale-95 disabled:opacity-45 disabled:shadow-none disabled:active:translate-y-0 disabled:active:scale-100"
+      >
+        {isPlaying ? (
+          <PauseIcon aria-hidden="true" className="h-5 w-5" />
+        ) : (
+          <PlayIcon aria-hidden="true" className="h-5 w-5 translate-x-px" />
+        )}
+      </button>
+
+      <div className="grid min-w-0 gap-2">
+        {children}
+        <div className="text-muted flex items-center justify-between gap-3 text-xs font-semibold">
+          <span>{formatSeconds(boundedPosition)}</span>
+          <span>
+            {hasDuration ? formatSeconds(durationSeconds) : '--:--.-'}
+          </span>
+        </div>
+        <input
+          id={seekName}
+          name={seekName}
+          aria-label={seekLabel}
+          type="range"
+          min={0}
+          max={durationSeconds || 1}
+          step={0.05}
+          value={boundedPosition}
+          disabled={!hasDuration}
+          onChange={(event) => onSeek(Number(event.target.value))}
+          className={rangeClassName('output')}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -696,46 +835,17 @@ function MusicConfig({
       ) : null}
 
       <div className="border-line bg-panel grid gap-3 rounded-lg border p-3">
-        <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
-          <button
-            type="button"
-            aria-label={isPlaying ? 'Pause music' : 'Play music'}
-            title={isPlaying ? 'Pause music' : 'Play music'}
-            onClick={soundCheck.toggleMusicPlayback}
-            disabled={!canUseTransport}
-            className="bg-output text-on-control hover:bg-output/90 flex h-12 w-12 shrink-0 items-center justify-center rounded-full shadow-[0_8px_22px_rgba(26,89,168,0.2)] transition focus:outline-none active:translate-y-px active:scale-95 disabled:opacity-45 disabled:shadow-none disabled:active:translate-y-0 disabled:active:scale-100"
-          >
-            {isPlaying ? (
-              <PauseIcon aria-hidden="true" className="h-5 w-5" />
-            ) : (
-              <PlayIcon aria-hidden="true" className="h-5 w-5 translate-x-px" />
-            )}
-          </button>
-
-          <div className="grid gap-2">
-            <div className="text-muted flex items-center justify-between gap-3 text-xs font-semibold">
-              <span>{formatSeconds(positionSeconds)}</span>
-              <span>
-                {hasLoadedMusic ? formatSeconds(durationSeconds) : '--:--.-'}
-              </span>
-            </div>
-            <input
-              aria-label="Music playback position"
-              type="range"
-              min={0}
-              max={durationSeconds || 1}
-              step={0.05}
-              value={
-                hasLoadedMusic ? clamp(positionSeconds, 0, durationSeconds) : 0
-              }
-              disabled={!hasLoadedMusic}
-              onChange={(event) =>
-                soundCheck.handleMusicSeek(Number(event.target.value))
-              }
-              className={rangeClassName('output')}
-            />
-          </div>
-        </div>
+        <AudioPlaybackControls
+          buttonLabel={isPlaying ? 'Pause music' : 'Play music'}
+          canUseTransport={canUseTransport}
+          durationSeconds={durationSeconds}
+          isPlaying={isPlaying}
+          onSeek={soundCheck.handleMusicSeek}
+          onToggle={soundCheck.toggleMusicPlayback}
+          positionSeconds={positionSeconds}
+          seekLabel="Music playback position"
+          seekName="music-playback-position"
+        />
 
         <div className="flex flex-wrap gap-2">
           <Button
@@ -817,8 +927,8 @@ function RefreshButton({
       onClick={handleClick}
       className={joinClasses(
         'text-muted hover:text-foreground flex h-9 w-9 items-center justify-center rounded-lg bg-transparent transition focus:outline-none active:translate-y-px active:scale-95',
-        accent === 'input' && 'hover:bg-input/[0.08]',
-        accent === 'output' && 'hover:bg-output/[0.08]',
+        accent === 'input' && 'hover:bg-input/8',
+        accent === 'output' && 'hover:bg-output/8',
       )}
     >
       <Icon

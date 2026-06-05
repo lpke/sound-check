@@ -9,10 +9,12 @@ export function useRecorder({
   ensureInputStream,
   setErrorMessage,
   setStatusMessage,
+  onClipReady,
 }: {
   ensureInputStream: () => Promise<MediaStream>;
   setErrorMessage: (message: string) => void;
   setStatusMessage: (message: string) => void;
+  onClipReady: (clip: RecordedClip) => void;
 }) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingChunksRef = useRef<Blob[]>([]);
@@ -75,12 +77,17 @@ export function useRecorder({
           }
 
           clipUrlRef.current = url;
-          setRecordedClip({
+          const clip: RecordedClip = {
             blob,
             durationSeconds,
             mimeType: blob.type || recorder.mimeType || 'audio/webm',
             url,
+          };
+
+          setRecordedClip({
+            ...clip,
           });
+          onClipReady(clip);
           setStatusMessage('Recording ready for playback.');
         }
 
@@ -119,6 +126,7 @@ export function useRecorder({
     }
   }, [
     ensureInputStream,
+    onClipReady,
     setErrorMessage,
     setStatusMessage,
     stopRecordingTimer,

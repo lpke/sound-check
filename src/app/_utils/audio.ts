@@ -172,7 +172,120 @@ export async function createMusicOutputGraph({
   startAtSeconds?: number;
 }): Promise<ActiveOutputGraph> {
   const context = createAudioContext();
-  const audioBuffer = await context.decodeAudioData(await getArrayBuffer());
+
+  try {
+    const audioBuffer = await context.decodeAudioData(await getArrayBuffer());
+
+    return await createAudioBufferOutputGraph({
+      audioBuffer,
+      context,
+      mode: 'speakerTest',
+      onEnded,
+      routeStreamToOutput,
+      setOutputLevel,
+      startAtSeconds,
+    });
+  } catch (error) {
+    context.close().catch(() => undefined);
+    throw error;
+  }
+}
+
+export async function createMonitorOutputGraph({
+  delayMs,
+  routeStreamToOutput,
+  setOutputLevel,
+  stream,
+}: {
+  delayMs: number;
+  routeStreamToOutput: (stream: MediaStream) => Promise<void>;
+  setOutputLevel: LevelSetter;
+  stream: MediaStream;
+}): Promise<ActiveOutputGraph> {
+  const context = createAudioContext();
+  const source = context.createMediaStreamSource(stream);
+  const delay = context.createDelay(MAX_MONITOR_DELAY_MS / 1000);
+  const analyser = context.createAnalyser();
+  const destination = context.createMediaStreamDestination();
+
+  analyser.fftSize = 1024;
+  analyser.smoothingTimeConstant = 0.7;
+  delay.delayTime.value = delayMs / 1000;
+
+  source.connect(delay);
+  delay.connect(analyser);
+  analyser.connect(destination);
+
+  await routeStreamToOutput(destination.stream);
+  await context.resume();
+
+  const cancelLevelLoop = startLevelLoop(analyser, setOutputLevel);
+
+  return {
+    context,
+    mode: 'monitor',
+    updateDelay: (seconds: number) => {
+      delay.delayTime.setTargetAtTime(seconds, context.currentTime, 0.02);
+    },
+    cancel: () => {
+      cancelLevelLoop();
+      source.disconnect();
+      delay.disconnect();
+      analyser.disconnect();
+    },
+  };
+}
+
+export async function createClipOutputGraph({
+  blob,
+  onEnded,
+  routeStreamToOutput,
+  setOutputLevel,
+  startAtSeconds = 0,
+}: {
+  blob: Blob;
+  onEnded: () => void;
+  routeStreamToOutput: (stream: MediaStream) => Promise<void>;
+  setOutputLevel: LevelSetter;
+  startAtSeconds?: number;
+}): Promise<ActiveOutputGraph> {
+  const context = createAudioContext();
+
+  try {
+    const audioBuffer = await context.decodeAudioData(await blob.arrayBuffer());
+
+    return await createAudioBufferOutputGraph({
+      audioBuffer,
+      context,
+      mode: 'clip',
+      onEnded,
+      routeStreamToOutput,
+      setOutputLevel,
+      startAtSeconds,
+    });
+  } catch (error) {
+    context.close().catch(() => undefined);
+    throw error;
+  }
+}
+
+async function createAudioBufferOutputGraph({
+  audioBuffer,
+  context,
+  mode,
+  onEnded,
+  routeStreamToOutput,
+  setOutputLevel,
+  startAtSeconds,
+}: {
+  audioBuffer: AudioBuffer;
+  context: AudioContext;
+  mode: ActiveOutputGraph['mode'];
+  onEnded: () => void;
+  routeStreamToOutput: (stream: MediaStream) => Promise<void>;
+  setOutputLevel: LevelSetter;
+  startAtSeconds: number;
+}): Promise<ActiveOutputGraph> {
   const analyser = context.createAnalyser();
   const destination = context.createMediaStreamDestination();
 
@@ -279,108 +392,13 @@ export async function createMusicOutputGraph({
     durationSeconds: audioBuffer.duration,
     getCurrentTime,
     isPaused: () => !isPlaying,
-    mode: 'speakerTest',
+    mode,
     pause,
     playFrom,
     cancel: () => {
       isCancelled = true;
       cancelLevelLoop();
       disconnectSource();
-      analyser.disconnect();
-    },
-  };
-}
-
-export async function createMonitorOutputGraph({
-  delayMs,
-  routeStreamToOutput,
-  setOutputLevel,
-  stream,
-}: {
-  delayMs: number;
-  routeStreamToOutput: (stream: MediaStream) => Promise<void>;
-  setOutputLevel: LevelSetter;
-  stream: MediaStream;
-}): Promise<ActiveOutputGraph> {
-  const context = createAudioContext();
-  const source = context.createMediaStreamSource(stream);
-  const delay = context.createDelay(MAX_MONITOR_DELAY_MS / 1000);
-  const analyser = context.createAnalyser();
-  const destination = context.createMediaStreamDestination();
-
-  analyser.fftSize = 1024;
-  analyser.smoothingTimeConstant = 0.7;
-  delay.delayTime.value = delayMs / 1000;
-
-  source.connect(delay);
-  delay.connect(analyser);
-  analyser.connect(destination);
-
-  await routeStreamToOutput(destination.stream);
-  await context.resume();
-
-  const cancelLevelLoop = startLevelLoop(analyser, setOutputLevel);
-
-  return {
-    context,
-    mode: 'monitor',
-    updateDelay: (seconds: number) => {
-      delay.delayTime.setTargetAtTime(seconds, context.currentTime, 0.02);
-    },
-    cancel: () => {
-      cancelLevelLoop();
-      source.disconnect();
-      delay.disconnect();
-      analyser.disconnect();
-    },
-  };
-}
-
-export async function createClipOutputGraph({
-  blob,
-  onEnded,
-  routeStreamToOutput,
-  setOutputLevel,
-}: {
-  blob: Blob;
-  onEnded: () => void;
-  routeStreamToOutput: (stream: MediaStream) => Promise<void>;
-  setOutputLevel: LevelSetter;
-}): Promise<ActiveOutputGraph> {
-  const context = createAudioContext();
-  const audioBuffer = await context.decodeAudioData(await blob.arrayBuffer());
-  const source = context.createBufferSource();
-  const analyser = context.createAnalyser();
-  const destination = context.createMediaStreamDestination();
-
-  source.buffer = audioBuffer;
-  analyser.fftSize = 1024;
-  analyser.smoothingTimeConstant = 0.68;
-
-  source.connect(analyser);
-  analyser.connect(destination);
-
-  await routeStreamToOutput(destination.stream);
-  await context.resume();
-  await warmOutputPipeline();
-
-  const cancelLevelLoop = startLevelLoop(analyser, setOutputLevel);
-  source.onended = onEnded;
-
-  source.start(context.currentTime + SOURCE_START_DELAY_SECONDS);
-
-  return {
-    context,
-    mode: 'clip',
-    cancel: () => {
-      cancelLevelLoop();
-      source.onended = null;
-      try {
-        source.stop();
-      } catch {
-        // Buffer source may already be stopped by playback end.
-      }
-      source.disconnect();
       analyser.disconnect();
     },
   };

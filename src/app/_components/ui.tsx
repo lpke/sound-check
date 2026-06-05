@@ -37,12 +37,16 @@ export function Field({
 export function Button({
   children,
   disabled,
+  title,
   onClick,
+  className,
   variant = 'primary',
 }: {
   children: ReactNode;
   disabled?: boolean;
+  title?: string;
   onClick: () => void;
+  className?: string;
   variant?:
     | 'danger'
     | 'outputPrimary'
@@ -54,6 +58,7 @@ export function Button({
     <button
       type="button"
       disabled={disabled}
+      title={title}
       onClick={onClick}
       className={joinClasses(
         'inline-flex h-11 items-center justify-center rounded-lg border px-4 text-sm font-semibold transition focus:outline-none active:translate-y-px active:scale-[0.985] disabled:opacity-50 disabled:active:translate-y-0 disabled:active:scale-100',
@@ -67,6 +72,7 @@ export function Button({
           'border-output/25 bg-output-soft text-output hover:border-output/35 hover:bg-output-soft/70',
         variant === 'danger' &&
           'border-danger bg-danger hover:bg-danger/90 text-white',
+        className,
       )}
     >
       {children}

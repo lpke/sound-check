@@ -56,6 +56,14 @@ export type RecordedClip = {
   url: string;
 };
 
+export type NamedRecordedClip = RecordedClip & {
+  id: string;
+  inputDeviceId: string;
+  inputDeviceName: string;
+  name: string;
+  createdAt: number;
+};
+
 export type ProcessingSettings = {
   autoGainControl: boolean;
   echoCancellation: boolean;

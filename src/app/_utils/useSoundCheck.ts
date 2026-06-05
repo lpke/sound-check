@@ -34,9 +34,11 @@ import {
   type ActiveOutputGraph,
   type AudioDevice,
   type MediaDevicesWithOutputPicker,
+  type NamedRecordedClip,
   type PermissionState,
   type ProcessingSettingKey,
   type ProcessingSettings,
+  type RecordedClip,
   type RoutedMode,
   type SectionSignalState,
   type SpeakerMusicSource,
@@ -66,12 +68,19 @@ type MusicPlaybackState = {
   positionSeconds: number;
 };
 
+type RecordedPlaybackState = {
+  activeClipId: string | null;
+  isPlaying: boolean;
+  positionsByClipId: Record<string, number>;
+};
+
 export function useSoundCheck() {
   const outputAudioRef = useRef<HTMLAudioElement | null>(null);
   const inputStreamRef = useRef<MediaStream | null>(null);
   const inputAnalyserRef = useRef<ActiveInputAnalyser | null>(null);
   const outputGraphRef = useRef<ActiveOutputGraph | null>(null);
   const musicProgressTimerRef = useRef<number | null>(null);
+  const recordedProgressTimerRef = useRef<number | null>(null);
   const pendingMusicStartAtRef = useRef<number | null>(null);
 
   const [isSupported, setIsSupported] = useState(true);
@@ -104,6 +113,16 @@ export function useSoundCheck() {
   const [routedMode, setRoutedMode] = useState<RoutedMode>('idle');
   const [inputLevel, setInputLevel] = useState(0);
   const [outputLevel, setOutputLevel] = useState(0);
+  const [recordedClips, setRecordedClips] = useState<NamedRecordedClip[]>([]);
+  const [recordedPlayback, setRecordedPlayback] =
+    useState<RecordedPlaybackState>({
+      activeClipId: null,
+      isPlaying: false,
+      positionsByClipId: {},
+    });
+  const [selectedRecordingId, setSelectedRecordingId] = useState<string | null>(
+    null,
+  );
   const [statusMessage, setStatusMessage] = useState(
     'Starting microphone when access is available.',
   );
@@ -128,6 +147,16 @@ export function useSoundCheck() {
       ),
     [outputDevices, selectedOutputId],
   );
+
+  const selectedRecordedClip = useMemo(() => {
+    if (!selectedRecordingId) {
+      return null;
+    }
+
+    return (
+      recordedClips.find((clip) => clip.id === selectedRecordingId) ?? null
+    );
+  }, [recordedClips, selectedRecordingId]);
 
   const inputStatus = appPaused
     ? {
@@ -205,6 +234,53 @@ export function useSoundCheck() {
     musicProgressTimerRef.current = window.setInterval(syncMusicPlayback, 120);
   }, [musicPlayback.durationSeconds, stopMusicProgressLoop]);
 
+  const stopRecordedProgressLoop = useCallback(() => {
+    if (recordedProgressTimerRef.current === null) {
+      return;
+    }
+
+    window.clearInterval(recordedProgressTimerRef.current);
+    recordedProgressTimerRef.current = null;
+  }, []);
+
+  const startRecordedProgressLoop = useCallback(
+    (clipId: string) => {
+      stopRecordedProgressLoop();
+
+      const syncRecordedPlayback = () => {
+        const activeGraph = outputGraphRef.current;
+
+        if (!activeGraph?.getCurrentTime) {
+          return;
+        }
+
+        const durationSeconds = activeGraph.durationSeconds ?? 0;
+        const positionSeconds = clamp(
+          activeGraph.getCurrentTime(),
+          0,
+          durationSeconds,
+        );
+
+        setRecordedPlayback((currentPlayback) => ({
+          ...currentPlayback,
+          activeClipId: clipId,
+          isPlaying: activeGraph.isPaused ? !activeGraph.isPaused() : true,
+          positionsByClipId: {
+            ...currentPlayback.positionsByClipId,
+            [clipId]: positionSeconds,
+          },
+        }));
+      };
+
+      syncRecordedPlayback();
+      recordedProgressTimerRef.current = window.setInterval(
+        syncRecordedPlayback,
+        120,
+      );
+    },
+    [stopRecordedProgressLoop],
+  );
+
   const stopInputAnalyser = useCallback(() => {
     const activeAnalyser = inputAnalyserRef.current;
     if (!activeAnalyser) {
@@ -226,33 +302,64 @@ export function useSoundCheck() {
     setPermissionState('idle');
   }, [stopInputAnalyser]);
 
-  const stopOutputGraph = useCallback(() => {
-    const activeGraph = outputGraphRef.current;
+  const stopOutputGraph = useCallback(
+    ({
+      resetRecordedPosition = false,
+    }: { resetRecordedPosition?: boolean } = {}) => {
+      const activeGraph = outputGraphRef.current;
 
-    stopMusicProgressLoop();
-    outputGraphRef.current = null;
+      stopMusicProgressLoop();
+      stopRecordedProgressLoop();
+      outputGraphRef.current = null;
 
-    if (activeGraph) {
-      activeGraph.cancel();
-      activeGraph.context.close().catch(() => undefined);
-    }
+      if (activeGraph) {
+        activeGraph.cancel();
+        activeGraph.context.close().catch(() => undefined);
+      }
 
-    const outputAudio = outputAudioRef.current;
-    if (outputAudio) {
-      outputAudio.pause();
-      outputAudio.srcObject = null;
-      outputAudio.removeAttribute('src');
-      outputAudio.load();
-    }
+      const outputAudio = outputAudioRef.current;
+      if (outputAudio) {
+        outputAudio.pause();
+        outputAudio.srcObject = null;
+        outputAudio.removeAttribute('src');
+        outputAudio.load();
+      }
 
-    setOutputLevel(0);
-    setMusicPlayback((currentPlayback) => ({
-      ...currentPlayback,
-      isPlaying: false,
-      positionSeconds: 0,
-    }));
-    setRoutedMode('idle');
-  }, [stopMusicProgressLoop]);
+      setOutputLevel(0);
+      setMusicPlayback((currentPlayback) => ({
+        ...currentPlayback,
+        isPlaying: false,
+        positionSeconds: 0,
+      }));
+      setRecordedPlayback((currentPlayback) => {
+        const activeClipId = currentPlayback.activeClipId;
+
+        if (!activeClipId) {
+          return {
+            ...currentPlayback,
+            isPlaying: false,
+          };
+        }
+
+        const durationSeconds = activeGraph?.durationSeconds ?? 0;
+        const currentPosition = activeGraph?.getCurrentTime
+          ? clamp(activeGraph.getCurrentTime(), 0, durationSeconds)
+          : (currentPlayback.positionsByClipId[activeClipId] ?? 0);
+
+        return {
+          ...currentPlayback,
+          activeClipId: null,
+          isPlaying: false,
+          positionsByClipId: {
+            ...currentPlayback.positionsByClipId,
+            [activeClipId]: resetRecordedPosition ? 0 : currentPosition,
+          },
+        };
+      });
+      setRoutedMode('idle');
+    },
+    [stopMusicProgressLoop, stopRecordedProgressLoop],
+  );
 
   const refreshDevices = useCallback(async () => {
     if (!navigator.mediaDevices?.enumerateDevices) {
@@ -345,6 +452,35 @@ export function useSoundCheck() {
     return startInputStream(selectedInputId);
   }, [selectedInputId, startInputStream]);
 
+  const handleRecordedClipReady = useCallback(
+    (clip: RecordedClip) => {
+      const inputName =
+        selectedInputName || `Microphone ${inputDevices.length + 1}`;
+      const clipId = `${Date.now()}-${Math.floor(Math.random() * 9999)}`;
+
+      setRecordedClips((currentRecordings) => [
+        ...currentRecordings,
+        {
+          ...clip,
+          createdAt: Date.now(),
+          id: clipId,
+          inputDeviceId: selectedInputId,
+          inputDeviceName: inputName,
+          name: `${inputName} ${currentRecordings.length + 1}`,
+        },
+      ]);
+      setRecordedPlayback((currentPlayback) => ({
+        ...currentPlayback,
+        positionsByClipId: {
+          ...currentPlayback.positionsByClipId,
+          [clipId]: 0,
+        },
+      }));
+      setSelectedRecordingId(clipId);
+    },
+    [inputDevices.length, selectedInputId, selectedInputName],
+  );
+
   const {
     isRecording,
     recordingSeconds,
@@ -355,6 +491,7 @@ export function useSoundCheck() {
     ensureInputStream,
     setErrorMessage,
     setStatusMessage,
+    onClipReady: handleRecordedClipReady,
   });
 
   const startRecording = useCallback(() => {
@@ -755,45 +892,234 @@ export function useSoundCheck() {
     pauseApp();
   }, [allAudioStopped, pauseApp, resumeApp]);
 
-  const playRecordedClip = useCallback(async () => {
-    if (appPaused || outputMuted) {
-      setStatusMessage(
-        outputMuted
-          ? 'Unmute the speaker section before playing audio.'
-          : 'Resume the app before playing audio.',
+  const playRecordedClip = useCallback(
+    async (clipId?: string) => {
+      const clip =
+        clipId === undefined
+          ? (selectedRecordedClip ?? recordedClips.at(-1))
+          : (recordedClips.find((item) => item.id === clipId) ?? null);
+
+      if (!clip) {
+        return;
+      }
+
+      if (appPaused || outputMuted) {
+        setStatusMessage(
+          outputMuted
+            ? 'Unmute the speaker section before playing audio.'
+            : 'Resume the app before playing audio.',
+        );
+        return;
+      }
+
+      const startAtSeconds = clamp(
+        recordedPlayback.positionsByClipId[clip.id] ?? 0,
+        0,
+        clip.durationSeconds,
       );
-      return;
-    }
 
-    if (!recordedClip) {
-      return;
-    }
-
-    setErrorMessage('');
-    setMonitorEnabled(false);
-    stopOutputGraph();
-
-    try {
-      outputGraphRef.current = await createClipOutputGraph({
-        blob: recordedClip.blob,
-        onEnded: stopOutputGraph,
-        routeStreamToOutput,
-        setOutputLevel,
-      });
-      setRoutedMode('clip');
-      setStatusMessage(`Playing recording on ${selectedOutputName}.`);
-    } catch (error) {
+      setErrorMessage('');
+      setMonitorEnabled(false);
+      setSelectedRecordingId(clip.id);
       stopOutputGraph();
-      setErrorMessage(toErrorMessage(error));
+
+      try {
+        outputGraphRef.current = await createClipOutputGraph({
+          blob: clip.blob,
+          onEnded: () =>
+            stopOutputGraph({
+              resetRecordedPosition: true,
+            }),
+          routeStreamToOutput,
+          setOutputLevel,
+          startAtSeconds,
+        });
+        setRecordedPlayback((currentPlayback) => ({
+          ...currentPlayback,
+          activeClipId: clip.id,
+          isPlaying: true,
+          positionsByClipId: {
+            ...currentPlayback.positionsByClipId,
+            [clip.id]: clamp(
+              startAtSeconds,
+              0,
+              outputGraphRef.current?.durationSeconds ?? clip.durationSeconds,
+            ),
+          },
+        }));
+        startRecordedProgressLoop(clip.id);
+        setRoutedMode('clip');
+        setStatusMessage(`Playing recording on ${selectedOutputName}.`);
+      } catch (error) {
+        stopOutputGraph();
+        setErrorMessage(toErrorMessage(error));
+      }
+    },
+    [
+      appPaused,
+      outputMuted,
+      recordedClips,
+      recordedPlayback.positionsByClipId,
+      routeStreamToOutput,
+      selectedOutputName,
+      selectedRecordedClip,
+      startRecordedProgressLoop,
+      stopOutputGraph,
+    ],
+  );
+
+  const pauseRecordedClip = useCallback(() => {
+    const activeClipId = recordedPlayback.activeClipId;
+    const activeGraph = outputGraphRef.current;
+
+    if (!activeClipId || !activeGraph?.pause) {
+      return;
     }
+
+    const durationSeconds = activeGraph.durationSeconds ?? 0;
+    const positionSeconds = clamp(
+      activeGraph.getCurrentTime?.() ??
+        recordedPlayback.positionsByClipId[activeClipId] ??
+        0,
+      0,
+      durationSeconds,
+    );
+
+    activeGraph.pause();
+    stopRecordedProgressLoop();
+    setRecordedPlayback((currentPlayback) => ({
+      ...currentPlayback,
+      isPlaying: false,
+      positionsByClipId: {
+        ...currentPlayback.positionsByClipId,
+        [activeClipId]: positionSeconds,
+      },
+    }));
+    setStatusMessage('Recording paused.');
   }, [
-    appPaused,
-    outputMuted,
-    recordedClip,
-    routeStreamToOutput,
-    selectedOutputName,
-    stopOutputGraph,
+    recordedPlayback.activeClipId,
+    recordedPlayback.positionsByClipId,
+    stopRecordedProgressLoop,
   ]);
+
+  const resumeRecordedClip = useCallback(
+    (clipId: string) => {
+      if (appPaused || outputMuted) {
+        setStatusMessage(
+          outputMuted
+            ? 'Unmute the speaker section before playing audio.'
+            : 'Resume the app before playing audio.',
+        );
+        return;
+      }
+
+      const activeGraph = outputGraphRef.current;
+      const positionSeconds = recordedPlayback.positionsByClipId[clipId] ?? 0;
+
+      if (recordedPlayback.activeClipId === clipId && activeGraph?.playFrom) {
+        activeGraph.playFrom(positionSeconds);
+        setRecordedPlayback((currentPlayback) => ({
+          ...currentPlayback,
+          activeClipId: clipId,
+          isPlaying: true,
+        }));
+        startRecordedProgressLoop(clipId);
+        setRoutedMode('clip');
+        setStatusMessage(`Playing recording on ${selectedOutputName}.`);
+        return;
+      }
+
+      void playRecordedClip(clipId);
+    },
+    [
+      appPaused,
+      outputMuted,
+      playRecordedClip,
+      recordedPlayback.activeClipId,
+      recordedPlayback.positionsByClipId,
+      selectedOutputName,
+      startRecordedProgressLoop,
+    ],
+  );
+
+  const toggleRecordedClipPlayback = useCallback(
+    (clipId: string) => {
+      if (
+        recordedPlayback.activeClipId === clipId &&
+        recordedPlayback.isPlaying
+      ) {
+        pauseRecordedClip();
+        return;
+      }
+
+      resumeRecordedClip(clipId);
+    },
+    [
+      pauseRecordedClip,
+      recordedPlayback.activeClipId,
+      recordedPlayback.isPlaying,
+      resumeRecordedClip,
+    ],
+  );
+
+  const handleRecordedClipSeek = useCallback(
+    (clipId: string, positionSeconds: number) => {
+      const clip = recordedClips.find((item) => item.id === clipId);
+
+      if (!clip) {
+        return;
+      }
+
+      const nextPosition = clamp(positionSeconds, 0, clip.durationSeconds);
+      const isActiveClip =
+        recordedPlayback.activeClipId === clipId && routedMode === 'clip';
+      const activeGraph = isActiveClip ? outputGraphRef.current : null;
+      const wasPlaying = activeGraph?.isPaused
+        ? !activeGraph.isPaused()
+        : isActiveClip && recordedPlayback.isPlaying;
+
+      if (activeGraph?.playFrom) {
+        activeGraph.playFrom(nextPosition);
+
+        if (wasPlaying) {
+          startRecordedProgressLoop(clipId);
+        } else {
+          activeGraph.pause?.();
+          stopRecordedProgressLoop();
+        }
+      }
+
+      setRecordedPlayback((currentPlayback) => ({
+        ...currentPlayback,
+        activeClipId: isActiveClip ? clipId : currentPlayback.activeClipId,
+        isPlaying: isActiveClip ? wasPlaying : currentPlayback.isPlaying,
+        positionsByClipId: {
+          ...currentPlayback.positionsByClipId,
+          [clipId]: nextPosition,
+        },
+      }));
+    },
+    [
+      recordedClips,
+      recordedPlayback.activeClipId,
+      recordedPlayback.isPlaying,
+      routedMode,
+      startRecordedProgressLoop,
+      stopRecordedProgressLoop,
+    ],
+  );
+
+  const renameRecordedClip = useCallback((clipId: string, nextName: string) => {
+    setRecordedClips((currentClips) =>
+      currentClips.map((clip) =>
+        clip.id === clipId ? { ...clip, name: nextName } : clip,
+      ),
+    );
+  }, []);
+
+  const selectRecordedClip = useCallback((clipId: string | null) => {
+    setSelectedRecordingId(clipId);
+  }, []);
 
   const syncPermissionState = useCallback(async () => {
     const permissionApi = navigator.permissions;
@@ -911,24 +1237,26 @@ export function useSoundCheck() {
       void refreshDevices();
     };
 
-    void syncPermissionState().then(() => {
-      if (!isActive || !navigator.permissions?.query) {
-        return;
-      }
+    window.queueMicrotask(() => {
+      void syncPermissionState().then(() => {
+        if (!isActive || !navigator.permissions?.query) {
+          return;
+        }
 
-      void navigator.permissions
-        .query({ name: 'microphone' as PermissionName })
-        .then((status) => {
-          if (!isActive) {
-            return;
-          }
+        void navigator.permissions
+          .query({ name: 'microphone' as PermissionName })
+          .then((status) => {
+            if (!isActive) {
+              return;
+            }
 
-          permissionStatus = status;
-          status.addEventListener?.('change', handlePermissionChange);
-        })
-        .catch(() => {
-          // Not all browsers expose microphone permission descriptors.
-        });
+            permissionStatus = status;
+            status.addEventListener?.('change', handlePermissionChange);
+          })
+          .catch(() => {
+            // Not all browsers expose microphone permission descriptors.
+          });
+      });
     });
 
     return () => {
@@ -1217,7 +1545,9 @@ export function useSoundCheck() {
     outputStatus,
     isRecording,
     recordingSeconds,
+    recordedClips,
     recordedClip,
+    recordedPlayback,
     statusMessage,
     errorMessage,
     pauseApp,
@@ -1236,9 +1566,13 @@ export function useSoundCheck() {
     playMusicFromMark,
     startMonitor,
     stopMonitor,
+    handleRecordedClipSeek,
+    renameRecordedClip,
+    selectRecordedClip,
     startRecording,
     stopRecording,
     playRecordedClip,
+    toggleRecordedClipPlayback,
     requestMicrophoneAccess,
     requestPermissionSync,
     requestOutputAccess,
