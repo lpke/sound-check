@@ -458,6 +458,7 @@ export function useSoundCheck() {
 
   const toggleInputMute = useCallback(() => {
     if (inputMuted) {
+      setAppPaused(false);
       setInputMuted(false);
       setStatusMessage('Microphone section unmuted.');
       return;
@@ -475,6 +476,7 @@ export function useSoundCheck() {
 
   const toggleOutputMute = useCallback(() => {
     if (outputMuted) {
+      setAppPaused(false);
       setOutputMuted(false);
       setStatusMessage('Speaker section unmuted.');
       return;

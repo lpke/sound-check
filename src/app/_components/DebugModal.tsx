@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type SVGProps } from 'react';
 import type { SoundCheckController } from '@/utils/useSoundCheck';
 import { getDeviceLabel } from '@/utils/devices';
 import { joinClasses } from '@/utils/utils';
@@ -226,34 +226,37 @@ export function DebugModal({ soundCheck }: DebugModalProps) {
           ))}
         </div>
 
-        <div className="flex justify-end">
+        <div className="group/debug-field relative">
           <button
             type="button"
+            aria-label="Copy debug JSON"
+            title="Copy debug JSON"
             onClick={copyDebugText}
             className={joinClasses(
-              'inline-flex h-10 items-center rounded-lg border px-3 text-sm font-semibold transition focus:ring-4 focus:outline-none',
+              'absolute top-2 right-2 z-10 inline-flex h-8 w-8 items-center justify-center rounded-md border text-sm opacity-0 transition group-hover/debug-field:opacity-100 focus:opacity-100 focus:ring-4 focus:outline-none',
               copyState === 'copied'
                 ? 'border-signal/30 bg-signal-soft text-signal focus:ring-control-soft'
                 : copyState === 'failed'
                   ? 'border-danger/30 bg-danger-soft text-danger focus:ring-danger-soft'
-                  : 'border-control bg-control text-on-control hover:bg-control-hover focus:ring-control-soft',
+                  : 'border-line bg-panel/90 text-muted hover:bg-panel hover:text-foreground focus:ring-control-soft',
             )}
           >
-            {copyState === 'copied'
-              ? 'Copied'
-              : copyState === 'failed'
-                ? 'Copy failed'
-                : 'Copy JSON'}
+            {copyState === 'copied' ? (
+              <CheckIcon aria-hidden="true" className="h-4 w-4" />
+            ) : (
+              <CopyIcon aria-hidden="true" className="h-4 w-4" />
+            )}
           </button>
-        </div>
 
-        <textarea
-          aria-label="Editable debug information JSON"
-          value={displayedDebugText}
-          onChange={(event) => setEditedDebugText(event.target.value)}
-          spellCheck={false}
-          className="border-line bg-panel-soft text-foreground focus:border-control focus:ring-control-soft min-h-[48svh] resize-y rounded-lg border p-4 font-mono text-xs leading-5 outline-none focus:ring-4"
-        />
+          <textarea
+            data-modal-scroll
+            aria-label="Editable debug information JSON"
+            value={displayedDebugText}
+            onChange={(event) => setEditedDebugText(event.target.value)}
+            spellCheck={false}
+            className="border-line bg-panel-soft text-foreground focus:border-control focus:ring-control-soft h-[50svh] min-h-80 w-full resize-y overflow-auto rounded-lg border p-4 pr-12 font-mono text-xs leading-5 outline-none focus:ring-4"
+          />
+        </div>
       </div>
     </Modal>
   );
@@ -315,4 +318,38 @@ function getRuntimeInfo(): RuntimeInfo {
     userAgent: navigator.userAgent,
     viewport: `${window.innerWidth}x${window.innerHeight}`,
   };
+}
+
+function CopyIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" {...props}>
+      <path
+        d="M7 6.25V4.5A1.5 1.5 0 0 1 8.5 3h5A1.5 1.5 0 0 1 15 4.5v6A1.5 1.5 0 0 1 13.5 12H12"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.6"
+      />
+      <path
+        d="M5.5 8h5A1.5 1.5 0 0 1 12 9.5v6a1.5 1.5 0 0 1-1.5 1.5h-5A1.5 1.5 0 0 1 4 15.5v-6A1.5 1.5 0 0 1 5.5 8Z"
+        stroke="currentColor"
+        strokeLinejoin="round"
+        strokeWidth="1.6"
+      />
+    </svg>
+  );
+}
+
+function CheckIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" {...props}>
+      <path
+        d="m4.5 10.5 3.25 3.25 7.75-8"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.9"
+      />
+    </svg>
+  );
 }

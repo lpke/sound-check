@@ -22,6 +22,7 @@ type SoundCheckProps = {
   soundCheck: SoundCheckController;
 };
 
+type SectionAccent = 'input' | 'output';
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 
 const speakerTestOptions: { kind: SpeakerTestKind; label: string }[] = [
@@ -167,7 +168,7 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
                 name="speaker-test-kind"
                 value={testKind}
                 onChange={handleSpeakerTestKindChange}
-                className="border-line bg-panel text-foreground focus:border-control focus:ring-control-soft h-11 w-full rounded-lg border px-3 text-sm transition outline-none focus:ring-4"
+                className={controlClassName('output')}
               >
                 {speakerTestOptions.map((option) => (
                   <option key={option.kind} value={option.kind}>
@@ -195,7 +196,7 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
                         Number(event.target.value),
                       )
                     }
-                    className="accent-control h-11 w-full"
+                    className={rangeClassName('output')}
                   />
                 </Field>
                 <div className="grid grid-cols-[1fr_auto] gap-2">
@@ -211,7 +212,7 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
                         Number(event.target.value),
                       )
                     }
-                    className="border-line bg-panel text-foreground focus:border-control focus:ring-control-soft h-11 rounded-lg border px-3 font-mono text-sm transition outline-none focus:ring-4"
+                    className={numberInputClassName('output')}
                   />
                   <span className="border-line bg-panel-soft text-muted flex h-11 items-center rounded-lg border px-3 text-sm">
                     Hz
@@ -286,7 +287,7 @@ function SectionShell({
   muted: boolean;
 }) {
   return (
-    <section className="border-line bg-panel relative overflow-hidden rounded-lg border shadow-sm">
+    <section className="border-line bg-panel relative overflow-hidden rounded-lg border shadow-[0_18px_48px_rgba(15,23,42,0.08)]">
       {children}
       {muted ? (
         <div className="pointer-events-none absolute inset-0 z-20 bg-slate-200/35 backdrop-grayscale" />
@@ -356,7 +357,7 @@ function SectionHeader({
         <Icon aria-hidden="true" className="h-5 w-5" />
       </button>
 
-      <label className="focus-within:ring-control-soft relative inline-flex max-w-full min-w-44 items-center justify-self-start rounded-md py-1 pr-7 text-left transition focus-within:ring-4">
+      <label className="relative inline-flex max-w-full min-w-44 items-center justify-self-start py-1 pr-7 text-left">
         <span className="sr-only">{selectLabel}</span>
         <span
           className="text-foreground min-w-0 truncate text-lg leading-tight font-semibold sm:text-xl"
@@ -376,7 +377,7 @@ function SectionHeader({
           title={visibleDeviceName}
           value={selectedDeviceId}
           onChange={onDeviceChange}
-          className="absolute inset-0 h-full w-full cursor-pointer appearance-none opacity-0 disabled:cursor-not-allowed"
+          className="absolute inset-0 h-full w-full cursor-pointer appearance-none opacity-0 outline-none disabled:cursor-not-allowed"
         >
           {devices.length === 0 ? (
             <option value="">{emptyLabel}</option>
@@ -394,6 +395,7 @@ function SectionHeader({
       </label>
 
       <RefreshButton
+        accent={accent}
         label="Refresh devices"
         onClick={onRefresh}
         icon={RefreshIcon}
@@ -440,7 +442,7 @@ function ProcessingBlock({ soundCheck }: SoundCheckProps) {
           onChange={(event) =>
             soundCheck.handleProcessingEnabledChange(event.target.checked)
           }
-          className="accent-control h-5 w-5 shrink-0"
+          className={checkboxClassName('input', 'h-5 w-5 shrink-0')}
         />
       </label>
 
@@ -503,7 +505,7 @@ function ProcessingOption({
         checked={checked}
         disabled={disabled}
         onChange={(event) => onChange(event.target.checked)}
-        className="accent-control mt-1 h-4 w-4 shrink-0"
+        className={checkboxClassName('input', 'mt-1 h-4 w-4 shrink-0')}
       />
       <span>
         <span className="text-foreground block text-sm font-semibold">
@@ -533,7 +535,7 @@ function LiveMonitorBlock({ soundCheck }: SoundCheckProps) {
             onChange={(event) =>
               soundCheck.handleDelayChange(Number(event.target.value))
             }
-            className="accent-control h-11 w-full"
+            className={rangeClassName('input')}
           />
         </Field>
         <div className="grid grid-cols-[1fr_auto] gap-2">
@@ -549,7 +551,7 @@ function LiveMonitorBlock({ soundCheck }: SoundCheckProps) {
             onChange={(event) =>
               soundCheck.handleDelayChange(Number(event.target.value))
             }
-            className="border-line bg-panel text-foreground focus:border-control focus:ring-control-soft h-11 rounded-lg border px-3 font-mono text-sm transition outline-none focus:ring-4"
+            className={numberInputClassName('input')}
           />
           <span className="border-line bg-panel text-muted flex h-11 items-center rounded-lg border px-3 text-sm">
             ms
@@ -664,10 +666,12 @@ function SettingsGroup({
 }
 
 function RefreshButton({
+  accent,
   icon: Icon,
   label,
   onClick,
 }: {
+  accent: SectionAccent;
   icon: IconComponent;
   label: string;
   onClick: () => Promise<void> | void;
@@ -690,13 +694,45 @@ function RefreshButton({
       aria-label={label}
       title={label}
       onClick={handleClick}
-      className="text-muted hover:bg-panel/80 hover:text-foreground focus:ring-control-soft flex h-9 w-9 items-center justify-center rounded-lg bg-transparent transition focus:ring-4 focus:outline-none"
+      className={joinClasses(
+        'text-muted hover:text-foreground flex h-9 w-9 items-center justify-center rounded-lg bg-transparent transition focus:ring-4 focus:outline-none',
+        accent === 'input' && 'hover:bg-input/10 focus:ring-input-soft',
+        accent === 'output' && 'hover:bg-output/10 focus:ring-output-soft',
+      )}
     >
       <Icon
         aria-hidden="true"
         className={joinClasses('h-4 w-4', isSpinning && 'animate-spin')}
       />
     </button>
+  );
+}
+
+function controlClassName(accent: SectionAccent) {
+  return joinClasses(
+    'border-line bg-panel text-foreground h-11 w-full rounded-lg border px-3 text-sm transition outline-none focus:ring-4',
+    accent === 'input' && 'focus:border-input focus:ring-input-soft',
+    accent === 'output' && 'focus:border-output focus:ring-output-soft',
+  );
+}
+
+function numberInputClassName(accent: SectionAccent) {
+  return joinClasses(controlClassName(accent), 'font-mono');
+}
+
+function rangeClassName(accent: SectionAccent) {
+  return joinClasses(
+    'h-11 w-full rounded-lg outline-none focus-visible:ring-4',
+    accent === 'input' && 'accent-input focus-visible:ring-input-soft',
+    accent === 'output' && 'accent-output focus-visible:ring-output-soft',
+  );
+}
+
+function checkboxClassName(accent: SectionAccent, className: string) {
+  return joinClasses(
+    className,
+    accent === 'input' && 'accent-input',
+    accent === 'output' && 'accent-output',
   );
 }
 

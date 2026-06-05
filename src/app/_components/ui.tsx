@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { StatusTone } from '@/utils/types';
 import { clamp, joinClasses } from '@/utils/utils';
 
@@ -146,27 +146,54 @@ export function LevelMeter({
   level: number;
 }) {
   const boundedLevel = clamp(level, 0, 1);
-  const meterColor =
-    accent === 'output'
-      ? 'var(--color-output)'
-      : accent === 'control'
-        ? 'var(--color-control)'
-        : 'var(--color-input)';
+  const [peakLevel, setPeakLevel] = useState(0);
+  const segments = Array.from({ length: 36 }, (_, index) => index);
+  const activeSegments = Math.round(boundedLevel * segments.length);
+  const peakSegment = Math.max(0, Math.ceil(peakLevel * segments.length) - 1);
+
+  useEffect(() => {
+    if (boundedLevel === peakLevel) {
+      return undefined;
+    }
+
+    const timeout = window.setTimeout(
+      () => setPeakLevel(boundedLevel),
+      boundedLevel > peakLevel ? 0 : 1100,
+    );
+
+    return () => window.clearTimeout(timeout);
+  }, [boundedLevel, peakLevel]);
 
   return (
     <div
       className={joinClasses(
-        'bg-panel-strong relative h-2 overflow-hidden',
+        'bg-panel-strong grid h-3 grid-cols-[repeat(36,minmax(0,1fr))] overflow-hidden',
         className,
       )}
     >
-      <span
-        className="absolute inset-0 block h-full"
-        style={{
-          background: `linear-gradient(90deg, ${meterColor} 0%, ${meterColor} 72%, var(--color-warning) 88%, var(--color-danger) 100%)`,
-          clipPath: `inset(0 ${100 - boundedLevel * 100}% 0 0)`,
-        }}
-      />
+      {segments.map((segment) => {
+        const isActive = segment < activeSegments;
+        const isPeak = peakLevel > 0 && segment === peakSegment;
+        const ratio = (segment + 1) / segments.length;
+
+        return (
+          <span
+            key={segment}
+            className={joinClasses(
+              'relative h-full min-w-0',
+              isActive && ratio <= 0.76 && accent === 'output' && 'bg-output',
+              isActive && ratio <= 0.76 && accent !== 'output' && 'bg-input',
+              isActive && ratio > 0.76 && ratio <= 0.9 && 'bg-warning',
+              isActive && ratio > 0.9 && 'bg-danger',
+              isActive &&
+                segment < activeSegments - 1 &&
+                'after:absolute after:top-0 after:right-0 after:h-full after:w-px after:bg-white/35',
+              isPeak &&
+                'before:bg-foreground/70 before:absolute before:top-0 before:right-0 before:z-10 before:h-full before:w-0.5',
+            )}
+          />
+        );
+      })}
     </div>
   );
 }

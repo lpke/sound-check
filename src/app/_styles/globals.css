@@ -68,6 +68,11 @@ select:disabled {
   cursor: not-allowed;
 }
 
+button:not(:disabled):not([tabindex='-1']),
+[role='button'] {
+  cursor: pointer;
+}
+
 ::selection {
   color: var(--color-on-control);
   background: var(--color-control);

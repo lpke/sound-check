@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { joinClasses } from '@/utils/utils';
 
-const EXIT_MS = 180;
+const EXIT_MS = 220;
 const MODAL_SHEET_MEDIA_QUERY = '(max-height: 760px)';
 const SCROLL_LOCK_KEYS = new Set([
   'ArrowDown',
@@ -242,12 +242,12 @@ export function Modal({
             >
               <style>{`
                 @keyframes modalOverlayIn {
-                  from { opacity: 0; backdrop-filter: blur(0); }
-                  to { opacity: 1; backdrop-filter: blur(4px); }
+                  from { opacity: 0; }
+                  to { opacity: 1; }
                 }
                 @keyframes modalOverlayOut {
-                  from { opacity: 1; backdrop-filter: blur(4px); }
-                  to { opacity: 0; backdrop-filter: blur(0); }
+                  from { opacity: 1; }
+                  to { opacity: 0; }
                 }
                 @keyframes modalSheetIn {
                   from { opacity: 0; transform: translateY(100%); }
@@ -286,10 +286,10 @@ export function Modal({
                 type="button"
                 tabIndex={-1}
                 className={joinClasses(
-                  'absolute inset-0 cursor-default bg-black/45',
+                  'will-change-opacity absolute inset-0 cursor-default bg-black/45 backdrop-blur-sm',
                   isClosing
-                    ? 'animate-[modalOverlayOut_180ms_ease-in_both]'
-                    : 'animate-[modalOverlayIn_200ms_ease-out_both]',
+                    ? 'animate-[modalOverlayOut_220ms_ease-in_both]'
+                    : 'animate-[modalOverlayIn_240ms_ease-out_both]',
                 )}
                 aria-label="Close modal"
                 onClick={(event) => {
@@ -304,8 +304,8 @@ export function Modal({
                 className={joinClasses(
                   'bg-panel border-line relative z-10 flex max-h-[90svh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border shadow-[0_28px_90px_rgba(15,23,42,0.24)] md:max-h-[88vh]',
                   isClosing
-                    ? 'animate-[modalGrowOut_160ms_ease-in_both]'
-                    : 'animate-[modalGrowIn_200ms_cubic-bezier(0.16,1,0.3,1)_both]',
+                    ? 'animate-[modalGrowOut_180ms_ease-in_both]'
+                    : 'animate-[modalGrowIn_220ms_cubic-bezier(0.16,1,0.3,1)_both]',
                   isSheetModal && 'min-h-[50svh]',
                   className,
                 )}
