@@ -1,4 +1,5 @@
 import { useRef, type ChangeEvent, type RefObject } from 'react';
+import { speakerMusicSources } from '@/utils/speakerMusic';
 import type { SpeakerMusicSource, SpeakerTestKind } from '@/utils/types';
 import { formatSeconds, joinClasses } from '@/utils/utils';
 import type { SoundCheckProps } from './componentTypes';
@@ -303,8 +304,11 @@ function MusicConfig({
               'appearance-none pr-9',
             )}
           >
-            <option value="builtIn">Blinding Lights</option>
-            <option value="file">Audio file</option>
+            {speakerMusicSources.map((option) => (
+              <option key={option.source} value={option.source}>
+                {option.label}
+              </option>
+            ))}
           </select>
           <ChevronDownIcon
             aria-hidden="true"

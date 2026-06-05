@@ -27,6 +27,7 @@ import {
   toAudioDevice,
 } from './devices';
 import { getInputStatus, getOutputStatus } from './status';
+import { speakerMusicTracks } from './speakerMusic';
 import {
   DEFAULT_OUTPUT_ID,
   MAX_MONITOR_DELAY_MS,
@@ -59,7 +60,7 @@ const defaultProcessingSettings: ProcessingSettings = {
 const defaultSpeakerTestSettings: SpeakerTestSettings = {
   kind: 'tone',
   musicFile: null,
-  musicSource: 'builtIn',
+  musicSource: 'blindingLights',
   toneFrequency: 440,
 };
 const SPECTRUM_PEAK_DECAY_PER_FRAME = 0.025;
@@ -764,13 +765,11 @@ export function useSoundCheck() {
       if (speakerTestSettings.kind === 'music') {
         const startAtSeconds =
           pendingMusicStartAtRef.current ?? musicPlayback.positionSeconds;
+        const musicSource = speakerTestSettings.musicSource;
 
         pendingMusicStartAtRef.current = null;
 
-        if (
-          speakerTestSettings.musicSource === 'file' &&
-          !speakerTestSettings.musicFile
-        ) {
+        if (musicSource === 'file' && !speakerTestSettings.musicFile) {
           setStatusMessage('Choose an audio file before playing.');
           return;
         }
@@ -782,7 +781,7 @@ export function useSoundCheck() {
         }));
         musicOutputGraphRef.current = await createMusicOutputGraph({
           getArrayBuffer: async () => {
-            if (speakerTestSettings.musicSource === 'file') {
+            if (musicSource === 'file') {
               return (
                 speakerTestSettings.musicFile?.arrayBuffer() ??
                 Promise.reject(
@@ -791,10 +790,11 @@ export function useSoundCheck() {
               );
             }
 
-            const response = await fetch('/audio/blinding-lights.flac');
+            const selectedTrack = speakerMusicTracks[musicSource];
+            const response = await fetch(selectedTrack.path);
 
             if (!response.ok) {
-              throw new Error('Built-in audio file could not be loaded.');
+              throw new Error(`${selectedTrack.label} could not be loaded.`);
             }
 
             return response.arrayBuffer();

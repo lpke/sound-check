@@ -11,7 +11,8 @@ export type RoutedMode = 'clip' | 'idle' | 'monitor' | 'speakerTest';
 export type StatusTone = 'danger' | 'good' | 'idle' | 'warn';
 export type SectionSignalState = 'active' | 'off' | 'ready';
 export type SpeakerTestKind = 'modulatedTone' | 'music' | 'sweep' | 'tone';
-export type SpeakerMusicSource = 'builtIn' | 'file';
+export type SpeakerMusicTrackId = 'blindingLights' | 'evilManBlues';
+export type SpeakerMusicSource = SpeakerMusicTrackId | 'file';
 
 export type AudioDevice = Pick<
   MediaDeviceInfo,
