@@ -26,6 +26,15 @@ export default function HomePage() {
               <InputSection soundCheck={controller} />
               <OutputSection soundCheck={controller} />
             </section>
+            <div className="flex justify-start pt-2">
+              <button
+                type="button"
+                onClick={controller.requestPermissionSync}
+                className="text-muted/70 hover:text-muted text-sm underline underline-offset-2 transition focus:outline-none"
+              >
+                Recheck permission and refresh devices
+              </button>
+            </div>
           </>
         )}
       </div>

@@ -795,6 +795,30 @@ export function useSoundCheck() {
     stopOutputGraph,
   ]);
 
+  const syncPermissionState = useCallback(async () => {
+    const permissionApi = navigator.permissions;
+
+    if (!permissionApi?.query) {
+      return;
+    }
+
+    try {
+      const microphonePermission = await permissionApi.query({
+        name: 'microphone' as PermissionName,
+      });
+
+      setPermissionState(
+        microphonePermission.state === 'denied'
+          ? 'blocked'
+          : microphonePermission.state === 'granted'
+            ? 'granted'
+            : 'idle',
+      );
+    } catch {
+      // Permissions API behavior differs across browsers.
+    }
+  }, []);
+
   const requestMicrophoneAccess = useCallback(async () => {
     if (appPaused || inputMuted) {
       setStatusMessage(
@@ -810,17 +834,114 @@ export function useSoundCheck() {
     try {
       await startInputStream(selectedInputId);
       await refreshDevices();
+      void syncPermissionState();
     } catch (error) {
-      setPermissionState('blocked');
+      if (
+        error instanceof DOMException &&
+        (error.name === 'NotAllowedError' ||
+          error.name === 'SecurityError' ||
+          error.message.includes('Permission denied'))
+      ) {
+        setPermissionState('blocked');
+      }
+
       setErrorMessage(toErrorMessage(error));
     }
   }, [
     appPaused,
     inputMuted,
     refreshDevices,
+    syncPermissionState,
     selectedInputId,
     startInputStream,
   ]);
+
+  const requestPermissionSync = useCallback(async () => {
+    if (appPaused || inputMuted) {
+      setStatusMessage(
+        inputMuted
+          ? 'Unmute the microphone section before re-requesting access.'
+          : 'Resume the app before re-requesting access.',
+      );
+      return;
+    }
+
+    setErrorMessage('');
+
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error('Microphone access is unavailable in this browser.');
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: false,
+      });
+
+      stream.getTracks().forEach((track) => track.stop());
+      await syncPermissionState();
+      await refreshDevices();
+      setStatusMessage('Permissions resynced and devices refreshed.');
+    } catch (error) {
+      if (
+        error instanceof DOMException &&
+        (error.name === 'NotAllowedError' ||
+          error.name === 'SecurityError' ||
+          error.message.includes('Permission denied'))
+      ) {
+        setPermissionState('blocked');
+      }
+
+      setErrorMessage(toErrorMessage(error));
+    }
+  }, [
+    appPaused,
+    inputMuted,
+    refreshDevices,
+    setErrorMessage,
+    setStatusMessage,
+    syncPermissionState,
+  ]);
+
+  useEffect(() => {
+    let permissionStatus: PermissionStatus | null = null;
+    let isActive = true;
+    const handlePermissionChange = () => {
+      void syncPermissionState();
+      void refreshDevices();
+    };
+
+    void syncPermissionState().then(() => {
+      if (!isActive || !navigator.permissions?.query) {
+        return;
+      }
+
+      void navigator.permissions
+        .query({ name: 'microphone' as PermissionName })
+        .then((status) => {
+          if (!isActive) {
+            return;
+          }
+
+          permissionStatus = status;
+          status.addEventListener?.('change', handlePermissionChange);
+        })
+        .catch(() => {
+          // Not all browsers expose microphone permission descriptors.
+        });
+    });
+
+    return () => {
+      isActive = false;
+
+      if (permissionStatus) {
+        permissionStatus.removeEventListener?.(
+          'change',
+          handlePermissionChange,
+        );
+      }
+    };
+  }, [refreshDevices, syncPermissionState]);
 
   const requestOutputAccess = useCallback(async () => {
     const mediaDevices = navigator.mediaDevices as MediaDevicesWithOutputPicker;
@@ -1019,7 +1140,15 @@ export function useSoundCheck() {
         })
         .catch((error) => {
           if (!cancelled) {
-            setPermissionState('blocked');
+            if (
+              error instanceof DOMException &&
+              (error.name === 'NotAllowedError' ||
+                error.name === 'SecurityError' ||
+                error.message.includes('Permission denied'))
+            ) {
+              setPermissionState('blocked');
+            }
+
             setErrorMessage(toErrorMessage(error));
           }
         });
@@ -1111,6 +1240,7 @@ export function useSoundCheck() {
     stopRecording,
     playRecordedClip,
     requestMicrophoneAccess,
+    requestPermissionSync,
     requestOutputAccess,
     handleInputChange,
     handleOutputChange,
