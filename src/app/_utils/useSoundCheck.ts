@@ -34,6 +34,7 @@ import {
   type ActiveInputAnalyser,
   type ActiveOutputGraph,
   type AudioDevice,
+  type FrequencyLevels,
   type MediaDevicesWithOutputPicker,
   type NamedRecordedClip,
   type PermissionState,
@@ -61,12 +62,19 @@ const defaultSpeakerTestSettings: SpeakerTestSettings = {
   musicSource: 'builtIn',
   toneFrequency: 440,
 };
+const SPECTRUM_PEAK_DECAY_PER_FRAME = 0.025;
 
 type MusicPlaybackState = {
   durationSeconds: number;
+  isLoading: boolean;
   isPlaying: boolean;
-  markSeconds: number | null;
+  marks: MusicMark[];
   positionSeconds: number;
+};
+
+type MusicMark = {
+  id: string;
+  seconds: number;
 };
 
 type RecordedPlaybackState = {
@@ -76,6 +84,18 @@ type RecordedPlaybackState = {
 };
 
 type OutputSlot = 'monitor' | 'music' | 'recording';
+
+function updateFrequencyPeaks(
+  currentPeaks: FrequencyLevels,
+  nextLevels: FrequencyLevels,
+) {
+  return nextLevels.map((nextLevel, index) =>
+    Math.max(
+      nextLevel,
+      (currentPeaks[index] ?? 0) - SPECTRUM_PEAK_DECAY_PER_FRAME,
+    ),
+  );
+}
 
 export function useSoundCheck() {
   const musicPlaybackAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -90,6 +110,11 @@ export function useSoundCheck() {
     monitor: 0,
     music: 0,
     recording: 0,
+  });
+  const outputSlotSpectraRef = useRef<Record<OutputSlot, FrequencyLevels>>({
+    monitor: [],
+    music: [],
+    recording: [],
   });
   const musicProgressTimerRef = useRef<number | null>(null);
   const recordedProgressTimerRef = useRef<number | null>(null);
@@ -116,14 +141,22 @@ export function useSoundCheck() {
     useState<SpeakerTestSettings>(defaultSpeakerTestSettings);
   const [musicPlayback, setMusicPlayback] = useState<MusicPlaybackState>({
     durationSeconds: 0,
+    isLoading: false,
     isPlaying: false,
-    markSeconds: null,
+    marks: [],
     positionSeconds: 0,
   });
   const [monitorEnabled, setMonitorEnabled] = useState(false);
   const [monitorDelayMs, setMonitorDelayMs] = useState(0);
   const [inputLevel, setInputLevel] = useState(0);
   const [outputLevel, setOutputLevel] = useState(0);
+  const [inputSpectrum, setInputSpectrum] = useState<FrequencyLevels>([]);
+  const [outputSpectrum, setOutputSpectrum] = useState<FrequencyLevels>([]);
+  const [inputSpectrumPeaks, setInputSpectrumPeaks] = useState<FrequencyLevels>(
+    [],
+  );
+  const [outputSpectrumPeaks, setOutputSpectrumPeaks] =
+    useState<FrequencyLevels>([]);
   const [recordedClips, setRecordedClips] = useState<NamedRecordedClip[]>([]);
   const [recordedPlayback, setRecordedPlayback] =
     useState<RecordedPlaybackState>({
@@ -308,6 +341,8 @@ export function useSoundCheck() {
     const activeAnalyser = inputAnalyserRef.current;
     if (!activeAnalyser) {
       setInputLevel(0);
+      setInputSpectrum([]);
+      setInputSpectrumPeaks([]);
       return;
     }
 
@@ -315,6 +350,8 @@ export function useSoundCheck() {
     activeAnalyser.cancel();
     activeAnalyser.context.close().catch(() => undefined);
     setInputLevel(0);
+    setInputSpectrum([]);
+    setInputSpectrumPeaks([]);
   }, []);
 
   const stopInputStream = useCallback(() => {
@@ -351,6 +388,45 @@ export function useSoundCheck() {
     [setOutputSlotLevel],
   );
 
+  const setOutputSlotSpectrum = useCallback(
+    (slot: OutputSlot, nextSpectrum: FrequencyLevels) => {
+      outputSlotSpectraRef.current[slot] = nextSpectrum;
+
+      const spectra = Object.values(outputSlotSpectraRef.current);
+      const mergedLength = Math.max(
+        0,
+        ...spectra.map((spectrum) => spectrum.length),
+      );
+
+      if (mergedLength === 0) {
+        setOutputSpectrum([]);
+        setOutputSpectrumPeaks([]);
+        return;
+      }
+
+      const mergedSpectrum = Array.from({ length: mergedLength }, (_, index) =>
+        Math.max(
+          outputSlotSpectraRef.current.monitor[index] ?? 0,
+          outputSlotSpectraRef.current.music[index] ?? 0,
+          outputSlotSpectraRef.current.recording[index] ?? 0,
+        ),
+      );
+
+      setOutputSpectrum(mergedSpectrum);
+      setOutputSpectrumPeaks((currentPeaks) =>
+        updateFrequencyPeaks(currentPeaks, mergedSpectrum),
+      );
+    },
+    [],
+  );
+
+  const clearOutputSlotSpectrum = useCallback(
+    (slot: OutputSlot) => {
+      setOutputSlotSpectrum(slot, []);
+    },
+    [setOutputSlotSpectrum],
+  );
+
   const stopMusicOutputGraph = useCallback(() => {
     const activeGraph = musicOutputGraphRef.current;
 
@@ -372,12 +448,14 @@ export function useSoundCheck() {
     }
 
     clearOutputSlotLevel('music');
+    clearOutputSlotSpectrum('music');
     setMusicPlayback((currentPlayback) => ({
       ...currentPlayback,
+      isLoading: false,
       isPlaying: false,
       positionSeconds: 0,
     }));
-  }, [clearOutputSlotLevel, stopMusicProgressLoop]);
+  }, [clearOutputSlotLevel, clearOutputSlotSpectrum, stopMusicProgressLoop]);
 
   const stopRecordedPlaybackOutputGraph = useCallback(
     ({
@@ -403,6 +481,7 @@ export function useSoundCheck() {
       }
 
       clearOutputSlotLevel('recording');
+      clearOutputSlotSpectrum('recording');
       setRecordedPlayback((currentPlayback) => {
         const activeClipId = currentPlayback.activeClipId;
 
@@ -425,7 +504,7 @@ export function useSoundCheck() {
         };
       });
     },
-    [clearOutputSlotLevel, stopRecordedProgressLoop],
+    [clearOutputSlotLevel, clearOutputSlotSpectrum, stopRecordedProgressLoop],
   );
 
   const stopPlaybackOutputGraph = useCallback(
@@ -458,7 +537,8 @@ export function useSoundCheck() {
     }
 
     clearOutputSlotLevel('monitor');
-  }, [clearOutputSlotLevel]);
+    clearOutputSlotSpectrum('monitor');
+  }, [clearOutputSlotLevel, clearOutputSlotSpectrum]);
 
   const stopOutputGraph = useCallback(
     ({
@@ -507,6 +587,12 @@ export function useSoundCheck() {
       inputAnalyserRef.current = await createInputAnalyser(
         stream,
         setInputLevel,
+        (nextSpectrum) => {
+          setInputSpectrum(nextSpectrum);
+          setInputSpectrumPeaks((currentPeaks) =>
+            updateFrequencyPeaks(currentPeaks, nextSpectrum),
+          );
+        },
       );
     },
     [stopInputAnalyser],
@@ -689,6 +775,11 @@ export function useSoundCheck() {
           return;
         }
 
+        setMusicPlayback((currentPlayback) => ({
+          ...currentPlayback,
+          isLoading: true,
+          isPlaying: false,
+        }));
         musicOutputGraphRef.current = await createMusicOutputGraph({
           getArrayBuffer: async () => {
             if (speakerTestSettings.musicSource === 'file') {
@@ -711,6 +802,8 @@ export function useSoundCheck() {
           onEnded: stopMusicOutputGraph,
           routeStreamToOutput: routePlaybackStreamToOutput,
           setOutputLevel: (nextLevel) => setOutputSlotLevel('music', nextLevel),
+          setOutputSpectrum: (nextSpectrum) =>
+            setOutputSlotSpectrum('music', nextSpectrum),
           startAtSeconds,
         });
         setIsMusicOutputActive(true);
@@ -719,6 +812,7 @@ export function useSoundCheck() {
           durationSeconds:
             musicOutputGraphRef.current?.durationSeconds ??
             currentPlayback.durationSeconds,
+          isLoading: false,
           isPlaying: true,
           positionSeconds: clamp(
             startAtSeconds,
@@ -733,6 +827,8 @@ export function useSoundCheck() {
           kind: speakerTestSettings.kind,
           routeStreamToOutput: routePlaybackStreamToOutput,
           setOutputLevel: (nextLevel) => setOutputSlotLevel('music', nextLevel),
+          setOutputSpectrum: (nextSpectrum) =>
+            setOutputSlotSpectrum('music', nextSpectrum),
           toneFrequency: speakerTestSettings.toneFrequency,
         });
         setIsMusicOutputActive(true);
@@ -745,6 +841,10 @@ export function useSoundCheck() {
       );
     } catch (error) {
       stopMusicOutputGraph();
+      setMusicPlayback((currentPlayback) => ({
+        ...currentPlayback,
+        isLoading: false,
+      }));
       setErrorMessage(toErrorMessage(error));
     }
   }, [
@@ -757,6 +857,7 @@ export function useSoundCheck() {
     stopMusicOutputGraph,
     routePlaybackStreamToOutput,
     setOutputSlotLevel,
+    setOutputSlotSpectrum,
   ]);
 
   const pauseMusicPlayback = useCallback(() => {
@@ -775,6 +876,7 @@ export function useSoundCheck() {
       ...currentPlayback,
       durationSeconds:
         activeGraph.durationSeconds ?? currentPlayback.durationSeconds,
+      isLoading: false,
       isPlaying: false,
       positionSeconds,
     }));
@@ -797,6 +899,7 @@ export function useSoundCheck() {
       activeGraph.playFrom(musicPlayback.positionSeconds);
       setMusicPlayback((currentPlayback) => ({
         ...currentPlayback,
+        isLoading: false,
         isPlaying: true,
       }));
       startMusicProgressLoop();
@@ -816,13 +919,22 @@ export function useSoundCheck() {
   ]);
 
   const toggleMusicPlayback = useCallback(() => {
+    if (musicPlayback.isLoading) {
+      return;
+    }
+
     if (musicPlayback.isPlaying) {
       pauseMusicPlayback();
       return;
     }
 
     resumeMusicPlayback();
-  }, [musicPlayback.isPlaying, pauseMusicPlayback, resumeMusicPlayback]);
+  }, [
+    musicPlayback.isLoading,
+    musicPlayback.isPlaying,
+    pauseMusicPlayback,
+    resumeMusicPlayback,
+  ]);
 
   const handleMusicSeek = useCallback(
     (positionSeconds: number) => {
@@ -848,6 +960,7 @@ export function useSoundCheck() {
       setMusicPlayback((currentPlayback) => ({
         ...currentPlayback,
         durationSeconds,
+        isLoading: false,
         isPlaying: wasPlaying,
         positionSeconds: nextPosition,
       }));
@@ -863,50 +976,72 @@ export function useSoundCheck() {
     const activeGraph = musicOutputGraphRef.current;
     const durationSeconds =
       activeGraph?.durationSeconds ?? musicPlayback.durationSeconds;
+
+    if (durationSeconds <= 0) {
+      return;
+    }
+
     const positionSeconds = clamp(
       activeGraph?.getCurrentTime?.() ?? musicPlayback.positionSeconds,
       0,
       durationSeconds || 0,
     );
+    const markId = `${Date.now()}-${Math.floor(Math.random() * 9999)}`;
 
     setMusicPlayback((currentPlayback) => ({
       ...currentPlayback,
-      markSeconds: positionSeconds,
+      marks: [
+        ...currentPlayback.marks,
+        {
+          id: markId,
+          seconds: positionSeconds,
+        },
+      ],
       positionSeconds,
     }));
   }, [musicPlayback.durationSeconds, musicPlayback.positionSeconds]);
 
-  const playMusicFromMark = useCallback(() => {
-    if (musicPlayback.markSeconds === null) {
-      return;
-    }
+  const playMusicFromMark = useCallback(
+    (markSeconds: number) => {
+      const activeGraph = musicOutputGraphRef.current;
+      const durationSeconds =
+        activeGraph?.durationSeconds ?? musicPlayback.durationSeconds;
+      const positionSeconds = clamp(markSeconds, 0, durationSeconds || 0);
 
-    const activeGraph = musicOutputGraphRef.current;
+      if (activeGraph?.playFrom) {
+        activeGraph.playFrom(positionSeconds);
+        startMusicProgressLoop();
+        setMusicPlayback((currentPlayback) => ({
+          ...currentPlayback,
+          isLoading: false,
+          isPlaying: true,
+          positionSeconds,
+        }));
+        setStatusMessage(`Playing music on ${selectedOutputName}.`);
+        return;
+      }
 
-    if (activeGraph?.playFrom) {
-      activeGraph.playFrom(musicPlayback.markSeconds);
-      startMusicProgressLoop();
+      pendingMusicStartAtRef.current = positionSeconds;
       setMusicPlayback((currentPlayback) => ({
         ...currentPlayback,
-        isPlaying: true,
-        positionSeconds: musicPlayback.markSeconds ?? 0,
+        positionSeconds,
       }));
-      setStatusMessage(`Playing music on ${selectedOutputName}.`);
-      return;
-    }
+      void startSpeakerTest();
+    },
+    [
+      musicPlayback.durationSeconds,
+      selectedOutputName,
+      startMusicProgressLoop,
+      startSpeakerTest,
+    ],
+  );
 
-    pendingMusicStartAtRef.current = musicPlayback.markSeconds;
+  const deleteMusicMark = useCallback((markId: string) => {
     setMusicPlayback((currentPlayback) => ({
       ...currentPlayback,
-      positionSeconds: musicPlayback.markSeconds ?? 0,
+      marks: currentPlayback.marks.filter((mark) => mark.id !== markId),
     }));
-    void startSpeakerTest();
-  }, [
-    musicPlayback.markSeconds,
-    selectedOutputName,
-    startMusicProgressLoop,
-    startSpeakerTest,
-  ]);
+  }, []);
 
   const startMonitor = useCallback(async () => {
     if (appPaused || inputMuted || outputMuted) {
@@ -929,6 +1064,8 @@ export function useSoundCheck() {
         delayMs: monitorDelayMs,
         routeStreamToOutput: routeMonitorStreamToOutput,
         setOutputLevel: (nextLevel) => setOutputSlotLevel('monitor', nextLevel),
+        setOutputSpectrum: (nextSpectrum) =>
+          setOutputSlotSpectrum('monitor', nextSpectrum),
         stream,
       });
 
@@ -953,6 +1090,7 @@ export function useSoundCheck() {
     selectedOutputName,
     stopMonitorOutputGraph,
     setOutputSlotLevel,
+    setOutputSlotSpectrum,
   ]);
 
   const stopMonitor = useCallback(() => {
@@ -1064,6 +1202,8 @@ export function useSoundCheck() {
           routeStreamToOutput: routeRecordedPlaybackStreamToOutput,
           setOutputLevel: (nextLevel) =>
             setOutputSlotLevel('recording', nextLevel),
+          setOutputSpectrum: (nextSpectrum) =>
+            setOutputSlotSpectrum('recording', nextSpectrum),
           startAtSeconds,
         });
         setIsRecordingPlaybackActive(true);
@@ -1098,6 +1238,7 @@ export function useSoundCheck() {
       selectedRecordedClip,
       startRecordedProgressLoop,
       setOutputSlotLevel,
+      setOutputSlotSpectrum,
       stopRecordedPlaybackOutputGraph,
     ],
   );
@@ -1251,6 +1392,51 @@ export function useSoundCheck() {
       ),
     );
   }, []);
+
+  const deleteRecordedClip = useCallback(
+    (clipId: string) => {
+      const clip = recordedClips.find((item) => item.id === clipId);
+
+      if (!clip) {
+        return;
+      }
+
+      if (recordedPlayback.activeClipId === clipId) {
+        stopRecordedPlaybackOutputGraph({ resetRecordedPosition: true });
+      }
+
+      setRecordedClips((currentClips) =>
+        currentClips.filter((currentClip) => currentClip.id !== clipId),
+      );
+      setRecordedPlayback((currentPlayback) => {
+        const positionsByClipId = { ...currentPlayback.positionsByClipId };
+
+        delete positionsByClipId[clipId];
+
+        return {
+          activeClipId:
+            currentPlayback.activeClipId === clipId
+              ? null
+              : currentPlayback.activeClipId,
+          isPlaying:
+            currentPlayback.activeClipId === clipId
+              ? false
+              : currentPlayback.isPlaying,
+          positionsByClipId,
+        };
+      });
+      setSelectedRecordingId((currentClipId) =>
+        currentClipId === clipId ? null : currentClipId,
+      );
+      URL.revokeObjectURL(clip.url);
+      setStatusMessage('Recording deleted.');
+    },
+    [
+      recordedClips,
+      recordedPlayback.activeClipId,
+      stopRecordedPlaybackOutputGraph,
+    ],
+  );
 
   const selectRecordedClip = useCallback((clipId: string | null) => {
     setSelectedRecordingId(clipId);
@@ -1459,6 +1645,7 @@ export function useSoundCheck() {
       if (kind !== 'music') {
         setMusicPlayback((currentPlayback) => ({
           ...currentPlayback,
+          isLoading: false,
           isPlaying: false,
           positionSeconds: 0,
         }));
@@ -1498,8 +1685,9 @@ export function useSoundCheck() {
       setMusicPlayback((currentPlayback) => ({
         ...currentPlayback,
         durationSeconds: 0,
+        isLoading: false,
         isPlaying: false,
-        markSeconds: null,
+        marks: [],
         positionSeconds: 0,
       }));
     },
@@ -1520,8 +1708,9 @@ export function useSoundCheck() {
       setMusicPlayback((currentPlayback) => ({
         ...currentPlayback,
         durationSeconds: 0,
+        isLoading: false,
         isPlaying: false,
-        markSeconds: null,
+        marks: [],
         positionSeconds: 0,
       }));
     },
@@ -1690,6 +1879,10 @@ export function useSoundCheck() {
     routedMode,
     inputLevel,
     outputLevel,
+    inputSpectrum,
+    outputSpectrum,
+    inputSpectrumPeaks,
+    outputSpectrumPeaks,
     inputStatus,
     outputStatus,
     isRecording,
@@ -1713,10 +1906,12 @@ export function useSoundCheck() {
     handleMusicSeek,
     markMusicPosition,
     playMusicFromMark,
+    deleteMusicMark,
     startMonitor,
     stopMonitor,
     handleRecordedClipSeek,
     renameRecordedClip,
+    deleteRecordedClip,
     selectRecordedClip,
     startRecording,
     stopRecording,

@@ -1,11 +1,9 @@
 'use client';
 
-import {
-  InputSection,
-  OutputSection,
-  UnsupportedPanel,
-  SiteFooter,
-} from '@/components/panels';
+import { InputSection } from '@/components/InputSection';
+import { OutputSection } from '@/components/OutputSection';
+import { SiteFooter } from '@/components/SiteFooter';
+import { UnsupportedPanel } from '@/components/UnsupportedPanel';
 import { useSoundCheck } from '@/utils/useSoundCheck';
 
 export default function HomePage() {

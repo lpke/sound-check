@@ -3,6 +3,7 @@ import { MAX_MONITOR_DELAY_MS } from './types';
 import type {
   ActiveInputAnalyser,
   ActiveOutputGraph,
+  FrequencyLevelSetter,
   LevelSetter,
   SpeakerTestKind,
   WindowWithWebkitAudio,
@@ -18,6 +19,9 @@ const OUTPUT_PIPELINE_WARMUP_MS = 240;
 const SOURCE_START_DELAY_SECONDS = 0.03;
 const METER_FLOOR_DB = -48;
 const METER_PEAK_HINT_GAIN = 0.72;
+const SPECTRUM_BIN_COUNT = 48;
+const SPECTRUM_MIN_FREQUENCY_HZ = 40;
+const SPECTRUM_MAX_FREQUENCY_HZ = 16000;
 const INPUT_METER_OPTIONS = {
   lowEndKnee: 0.55,
   lowEndPower: 1.8,
@@ -42,13 +46,14 @@ export function createAudioContext() {
 export async function createInputAnalyser(
   stream: MediaStream,
   setInputLevel: LevelSetter,
+  setInputSpectrum?: FrequencyLevelSetter,
 ): Promise<ActiveInputAnalyser> {
   const context = createAudioContext();
   const source = context.createMediaStreamSource(stream);
   const analyser = context.createAnalyser();
 
   analyser.fftSize = 1024;
-  analyser.smoothingTimeConstant = 0.72;
+  analyser.smoothingTimeConstant = 0;
 
   source.connect(analyser);
 
@@ -58,6 +63,7 @@ export async function createInputAnalyser(
     analyser,
     setInputLevel,
     INPUT_METER_OPTIONS,
+    setInputSpectrum,
   );
 
   return {
@@ -75,11 +81,13 @@ export async function createSpeakerTestOutputGraph({
   kind,
   routeStreamToOutput,
   setOutputLevel,
+  setOutputSpectrum,
   toneFrequency,
 }: {
   kind: Exclude<SpeakerTestKind, 'music'>;
   routeStreamToOutput: (stream: MediaStream) => Promise<void>;
   setOutputLevel: LevelSetter;
+  setOutputSpectrum?: FrequencyLevelSetter;
   toneFrequency: number;
 }): Promise<ActiveOutputGraph> {
   const context = createAudioContext();
@@ -143,7 +151,12 @@ export async function createSpeakerTestOutputGraph({
     modulation.start(startAt);
   }
 
-  const cancelLevelLoop = startLevelLoop(analyser, setOutputLevel);
+  const cancelLevelLoop = startLevelLoop(
+    analyser,
+    setOutputLevel,
+    {},
+    setOutputSpectrum,
+  );
 
   return {
     context,
@@ -177,12 +190,14 @@ export async function createMusicOutputGraph({
   onEnded,
   routeStreamToOutput,
   setOutputLevel,
+  setOutputSpectrum,
   startAtSeconds = 0,
 }: {
   getArrayBuffer: () => Promise<ArrayBuffer>;
   onEnded: () => void;
   routeStreamToOutput: (stream: MediaStream) => Promise<void>;
   setOutputLevel: LevelSetter;
+  setOutputSpectrum?: FrequencyLevelSetter;
   startAtSeconds?: number;
 }): Promise<ActiveOutputGraph> {
   const context = createAudioContext();
@@ -197,6 +212,7 @@ export async function createMusicOutputGraph({
       onEnded,
       routeStreamToOutput,
       setOutputLevel,
+      setOutputSpectrum,
       startAtSeconds,
     });
   } catch (error) {
@@ -209,11 +225,13 @@ export async function createMonitorOutputGraph({
   delayMs,
   routeStreamToOutput,
   setOutputLevel,
+  setOutputSpectrum,
   stream,
 }: {
   delayMs: number;
   routeStreamToOutput: (stream: MediaStream) => Promise<void>;
   setOutputLevel: LevelSetter;
+  setOutputSpectrum?: FrequencyLevelSetter;
   stream: MediaStream;
 }): Promise<ActiveOutputGraph> {
   const context = createAudioContext();
@@ -223,7 +241,7 @@ export async function createMonitorOutputGraph({
   const destination = context.createMediaStreamDestination();
 
   analyser.fftSize = 1024;
-  analyser.smoothingTimeConstant = 0.7;
+  analyser.smoothingTimeConstant = 0;
   delay.delayTime.value = delayMs / 1000;
 
   source.connect(delay);
@@ -233,7 +251,12 @@ export async function createMonitorOutputGraph({
   await routeStreamToOutput(destination.stream);
   await context.resume();
 
-  const cancelLevelLoop = startLevelLoop(analyser, setOutputLevel);
+  const cancelLevelLoop = startLevelLoop(
+    analyser,
+    setOutputLevel,
+    {},
+    setOutputSpectrum,
+  );
 
   return {
     context,
@@ -255,12 +278,14 @@ export async function createClipOutputGraph({
   onEnded,
   routeStreamToOutput,
   setOutputLevel,
+  setOutputSpectrum,
   startAtSeconds = 0,
 }: {
   blob: Blob;
   onEnded: () => void;
   routeStreamToOutput: (stream: MediaStream) => Promise<void>;
   setOutputLevel: LevelSetter;
+  setOutputSpectrum?: FrequencyLevelSetter;
   startAtSeconds?: number;
 }): Promise<ActiveOutputGraph> {
   const context = createAudioContext();
@@ -275,6 +300,7 @@ export async function createClipOutputGraph({
       onEnded,
       routeStreamToOutput,
       setOutputLevel,
+      setOutputSpectrum,
       startAtSeconds,
     });
   } catch (error) {
@@ -290,6 +316,7 @@ async function createAudioBufferOutputGraph({
   onEnded,
   routeStreamToOutput,
   setOutputLevel,
+  setOutputSpectrum,
   startAtSeconds,
 }: {
   audioBuffer: AudioBuffer;
@@ -298,13 +325,14 @@ async function createAudioBufferOutputGraph({
   onEnded: () => void;
   routeStreamToOutput: (stream: MediaStream) => Promise<void>;
   setOutputLevel: LevelSetter;
+  setOutputSpectrum?: FrequencyLevelSetter;
   startAtSeconds: number;
 }): Promise<ActiveOutputGraph> {
   const analyser = context.createAnalyser();
   const destination = context.createMediaStreamDestination();
 
   analyser.fftSize = 1024;
-  analyser.smoothingTimeConstant = 0.68;
+  analyser.smoothingTimeConstant = 0;
 
   analyser.connect(destination);
 
@@ -312,7 +340,12 @@ async function createAudioBufferOutputGraph({
   await context.resume();
   await warmOutputPipeline();
 
-  const cancelLevelLoop = startLevelLoop(analyser, setOutputLevel);
+  const cancelLevelLoop = startLevelLoop(
+    analyser,
+    setOutputLevel,
+    {},
+    setOutputSpectrum,
+  );
   const maxStartOffset = Math.max(audioBuffer.duration - 0.02, 0);
   let source: AudioBufferSourceNode | null = null;
   let sourceOffset = clamp(startAtSeconds, 0, maxStartOffset);
@@ -397,6 +430,7 @@ async function createAudioBufferOutputGraph({
     isPlaying = false;
     disconnectSource();
     setOutputLevel(0);
+    setOutputSpectrum?.([]);
   }
 
   playFrom(startAtSeconds);
@@ -428,19 +462,36 @@ export function startLevelLoop(
   analyser: AnalyserNode,
   setLevel: LevelSetter,
   meterOptions: MeterOptions = {},
+  setSpectrum?: FrequencyLevelSetter,
 ) {
-  const buffer = new Uint8Array(analyser.fftSize);
+  analyser.minDecibels = METER_FLOOR_DB;
+  analyser.maxDecibels = 0;
+  analyser.smoothingTimeConstant = 0;
+
+  const timeDomainBuffer = new Uint8Array(analyser.fftSize);
+  const frequencyBuffer = new Uint8Array(analyser.frequencyBinCount);
   let frame = 0;
   let lastUpdateAt = 0;
 
   const tick = () => {
-    analyser.getByteTimeDomainData(buffer);
-    const nextLevel = getSignalLevel(buffer, meterOptions);
+    analyser.getByteTimeDomainData(timeDomainBuffer);
+    const nextLevel = getSignalLevel(timeDomainBuffer, meterOptions);
     const now = performance.now();
 
     if (now - lastUpdateAt >= 32) {
       lastUpdateAt = now;
       setLevel(nextLevel);
+
+      if (setSpectrum) {
+        analyser.getByteFrequencyData(frequencyBuffer);
+        setSpectrum(
+          getFrequencyLevels(
+            frequencyBuffer,
+            analyser.context.sampleRate,
+            nextLevel,
+          ),
+        );
+      }
     }
 
     frame = window.requestAnimationFrame(tick);
@@ -451,6 +502,7 @@ export function startLevelLoop(
   return () => {
     window.cancelAnimationFrame(frame);
     setLevel(0);
+    setSpectrum?.([]);
   };
 }
 
@@ -486,6 +538,54 @@ function getSignalLevel(buffer: Uint8Array, meterOptions: MeterOptions) {
     clamp(Math.max(rmsLevel, peakHintLevel), 0, 1),
     meterOptions,
   );
+}
+
+function getFrequencyLevels(
+  buffer: Uint8Array,
+  sampleRate: number,
+  currentLevel: number,
+) {
+  const nyquistFrequency = sampleRate / 2;
+  const maxFrequency = Math.min(SPECTRUM_MAX_FREQUENCY_HZ, nyquistFrequency);
+  const binFrequencyWidth = nyquistFrequency / buffer.length;
+  const rawLevels = Array.from({ length: SPECTRUM_BIN_COUNT }, (_, index) => {
+    const startRatio = index / SPECTRUM_BIN_COUNT;
+    const endRatio = (index + 1) / SPECTRUM_BIN_COUNT;
+    const startFrequency =
+      SPECTRUM_MIN_FREQUENCY_HZ *
+      Math.pow(maxFrequency / SPECTRUM_MIN_FREQUENCY_HZ, startRatio);
+    const endFrequency =
+      SPECTRUM_MIN_FREQUENCY_HZ *
+      Math.pow(maxFrequency / SPECTRUM_MIN_FREQUENCY_HZ, endRatio);
+    const startIndex = Math.max(
+      0,
+      Math.floor(startFrequency / binFrequencyWidth),
+    );
+    const endIndex = Math.max(
+      startIndex + 1,
+      Math.ceil(endFrequency / binFrequencyWidth),
+    );
+    let peak = 0;
+
+    for (
+      let bufferIndex = startIndex;
+      bufferIndex <= endIndex && bufferIndex < buffer.length;
+      bufferIndex += 1
+    ) {
+      peak = Math.max(peak, buffer[bufferIndex] ?? 0);
+    }
+
+    return clamp(peak / 255, 0, 1);
+  });
+  const maxLevel = Math.max(0, ...rawLevels);
+
+  if (maxLevel <= 0 || currentLevel <= maxLevel) {
+    return rawLevels;
+  }
+
+  const scale = currentLevel / maxLevel;
+
+  return rawLevels.map((level) => clamp(level * scale, 0, 1));
 }
 
 function amplitudeToMeterLevel(amplitude: number) {

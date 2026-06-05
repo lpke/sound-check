@@ -80,7 +80,10 @@ export type SpeakerTestSettings = {
   musicSource: SpeakerMusicSource;
 };
 
+export type FrequencyLevels = number[];
+
 export type LevelSetter = Dispatch<SetStateAction<number>>;
+export type FrequencyLevelSetter = (levels: FrequencyLevels) => void;
 
 export type AudioStatus = {
   label: string;

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { StatusTone } from '@/utils/types';
 import { clamp, joinClasses } from '@/utils/utils';
 
@@ -142,24 +142,45 @@ export function StatusPill({
   );
 }
 
+const LEVEL_METER_SEGMENT_COUNT = 48;
+
 export function LevelMeter({
   accent = 'control',
   className,
   level,
+  spectrum = [],
+  spectrumPeaks = [],
 }: {
   accent?: 'control' | 'input' | 'output';
   className?: string;
   level: number;
+  spectrum?: readonly number[];
+  spectrumPeaks?: readonly number[];
 }) {
   const boundedLevel = clamp(level, 0, 1);
   const [peakLevel, setPeakLevel] = useState(0);
   const [isPeakVisible, setIsPeakVisible] = useState(false);
+  const [isSpectrumVisible, setIsSpectrumVisible] = useState(false);
   const latestLevelRef = useRef(boundedLevel);
   const fadeTimerRef = useRef<number | null>(null);
   const dropTimerRef = useRef<number | null>(null);
-  const segments = Array.from({ length: 48 }, (_, index) => index);
+  const segments = Array.from(
+    { length: LEVEL_METER_SEGMENT_COUNT },
+    (_, index) => index,
+  );
   const activeSegments = Math.round(boundedLevel * segments.length);
   const peakSegment = Math.max(0, Math.ceil(peakLevel * segments.length) - 1);
+  const visualizerLevels = useMemo(
+    () => normalizeSpectrumLevels(spectrum, LEVEL_METER_SEGMENT_COUNT),
+    [spectrum],
+  );
+  const visualizerPeakLevels = useMemo(
+    () => normalizeSpectrumLevels(spectrumPeaks, LEVEL_METER_SEGMENT_COUNT),
+    [spectrumPeaks],
+  );
+  const toggleLabel = isSpectrumVisible
+    ? 'Show simple level meter'
+    : 'Show frequency visualizer';
 
   useEffect(() => {
     latestLevelRef.current = boundedLevel;
@@ -206,37 +227,150 @@ export function LevelMeter({
   }, []);
 
   return (
-    <div
+    <button
+      type="button"
+      aria-label={toggleLabel}
+      aria-pressed={isSpectrumVisible}
+      title={toggleLabel}
+      onClick={() => setIsSpectrumVisible((current) => !current)}
       className={joinClasses(
-        'bg-panel-strong grid h-3 grid-cols-[repeat(48,minmax(0,1fr))] overflow-hidden',
+        'bg-panel-strong focus-visible:ring-control-soft relative block w-full overflow-hidden p-0 text-left transition-[height,background-color,box-shadow] duration-300 ease-out focus-visible:ring-2 focus-visible:outline-none',
+        isSpectrumVisible
+          ? 'h-20 shadow-[inset_0_0_0_1px_rgba(23,26,31,0.08),inset_0_12px_28px_rgba(23,26,31,0.08)]'
+          : 'grid h-3 grid-cols-[repeat(48,minmax(0,1fr))]',
         className,
       )}
     >
-      {segments.map((segment) => {
-        const isActive = segment < activeSegments;
-        const isPeak = peakLevel > 0 && segment === peakSegment;
-        const ratio = (segment + 1) / segments.length;
-
-        return (
+      {isSpectrumVisible ? (
+        <>
           <span
-            key={segment}
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 opacity-45"
+            style={{
+              backgroundImage:
+                'linear-gradient(to right, rgba(255,255,255,0.65) 1px, transparent 1px), linear-gradient(to top, rgba(23,26,31,0.16) 1px, transparent 1px)',
+              backgroundSize: '12.5% 100%, 100% 25%',
+            }}
+          />
+          <span
+            aria-hidden="true"
+            className="bg-danger absolute inset-x-0 top-0 z-20 h-px opacity-70"
+          />
+          <span
+            aria-hidden="true"
+            className="absolute inset-x-1 top-2 bottom-1 z-10 flex items-stretch gap-0.5"
+          >
+            {visualizerLevels.map((visualizerLevel, index) => {
+              const peakLevelForBand = clamp(
+                visualizerPeakLevels[index] ?? 0,
+                0,
+                1,
+              );
+
+              return (
+                <span key={index} className="relative min-w-0 flex-1">
+                  <span
+                    className={joinClasses(
+                      'absolute inset-x-0 bottom-0 rounded-t-sm transition-[height,opacity,background-color] duration-75',
+                      meterToneClassName(visualizerLevel, accent),
+                    )}
+                    style={{
+                      height: `${visualizerLevel > 0 ? Math.max(5, visualizerLevel * 100) : 2}%`,
+                      opacity: 0.18 + visualizerLevel * 0.82,
+                    }}
+                  />
+                  <span
+                    className="bg-foreground/70 absolute inset-x-0 h-px transition-[bottom,opacity] duration-75"
+                    style={{
+                      bottom: `${peakLevelForBand * 100}%`,
+                      opacity: peakLevelForBand > 0 ? 0.72 : 0,
+                    }}
+                  />
+                </span>
+              );
+            })}
+          </span>
+          <span
+            aria-hidden="true"
             className={joinClasses(
-              'relative h-full min-w-0',
-              isActive && ratio <= 0.76 && accent === 'output' && 'bg-output',
-              isActive && ratio <= 0.76 && accent !== 'output' && 'bg-input',
-              isActive && ratio > 0.76 && ratio <= 0.9 && 'bg-warning',
-              isActive && ratio > 0.9 && 'bg-danger',
-              isActive &&
-                segment < activeSegments - 1 &&
-                'after:absolute after:top-0 after:right-0 after:h-full after:w-px after:bg-white/35',
-              isPeak &&
-                'before:bg-foreground/70 before:absolute before:top-0 before:right-0 before:z-10 before:h-full before:w-0.5 before:transition-opacity before:duration-300',
-              isPeak &&
-                (isPeakVisible ? 'before:opacity-100' : 'before:opacity-0'),
+              'pointer-events-none absolute inset-x-0 bottom-0 z-30 h-10 bg-gradient-to-t to-transparent',
+              accent === 'output'
+                ? 'from-output-soft/45'
+                : 'from-input-soft/45',
             )}
           />
-        );
-      })}
-    </div>
+        </>
+      ) : (
+        segments.map((segment) => {
+          const isActive = segment < activeSegments;
+          const isPeak = peakLevel > 0 && segment === peakSegment;
+          const ratio = (segment + 1) / segments.length;
+
+          return (
+            <span
+              key={segment}
+              className={joinClasses(
+                'relative h-full min-w-0',
+                isActive && meterToneClassName(ratio, accent),
+                isActive &&
+                  segment < activeSegments - 1 &&
+                  'after:absolute after:top-0 after:right-0 after:h-full after:w-px after:bg-white/35',
+                isPeak &&
+                  'before:bg-foreground/70 before:absolute before:top-0 before:right-0 before:z-10 before:h-full before:w-0.5 before:transition-opacity before:duration-300',
+                isPeak &&
+                  (isPeakVisible ? 'before:opacity-100' : 'before:opacity-0'),
+              )}
+            />
+          );
+        })
+      )}
+    </button>
   );
+}
+
+function meterToneClassName(
+  value: number,
+  accent: 'control' | 'input' | 'output',
+) {
+  if (value > 0.9) {
+    return 'bg-danger';
+  }
+
+  if (value > 0.76) {
+    return 'bg-warning';
+  }
+
+  return accent === 'output' ? 'bg-output' : 'bg-input';
+}
+
+function normalizeSpectrumLevels(
+  spectrum: readonly number[],
+  segmentCount: number,
+) {
+  if (spectrum.length === segmentCount) {
+    return spectrum.map((level) => clamp(level, 0, 1));
+  }
+
+  if (spectrum.length === 0) {
+    return Array.from({ length: segmentCount }, () => 0);
+  }
+
+  return Array.from({ length: segmentCount }, (_, index) => {
+    const startIndex = Math.floor((index / segmentCount) * spectrum.length);
+    const endIndex = Math.max(
+      startIndex + 1,
+      Math.ceil(((index + 1) / segmentCount) * spectrum.length),
+    );
+    let peak = 0;
+
+    for (
+      let spectrumIndex = startIndex;
+      spectrumIndex < endIndex && spectrumIndex < spectrum.length;
+      spectrumIndex += 1
+    ) {
+      peak = Math.max(peak, spectrum[spectrumIndex] ?? 0);
+    }
+
+    return clamp(peak, 0, 1);
+  });
 }
