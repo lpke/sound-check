@@ -16,6 +16,8 @@ const preferredMimeTypes = [
 ];
 const OUTPUT_PIPELINE_WARMUP_MS = 240;
 const SOURCE_START_DELAY_SECONDS = 0.03;
+const METER_FLOOR_DB = -48;
+const METER_PEAK_HINT_GAIN = 0.72;
 
 export function createAudioContext() {
   const AudioContextConstructor =
@@ -460,6 +462,18 @@ function getSignalLevel(buffer: Uint8Array) {
   }
 
   const rms = Math.sqrt(sumSquares / buffer.length);
+  const rmsLevel = amplitudeToMeterLevel(rms);
+  const peakHintLevel = amplitudeToMeterLevel(peak) * METER_PEAK_HINT_GAIN;
 
-  return clamp(Math.max(rms * 4.8, peak * 1.15), 0, 1);
+  return clamp(Math.max(rmsLevel, peakHintLevel), 0, 1);
+}
+
+function amplitudeToMeterLevel(amplitude: number) {
+  if (amplitude <= 0) {
+    return 0;
+  }
+
+  const decibels = 20 * Math.log10(amplitude);
+
+  return clamp((decibels - METER_FLOOR_DB) / Math.abs(METER_FLOOR_DB), 0, 1);
 }

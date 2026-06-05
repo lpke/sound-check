@@ -4,7 +4,7 @@ export const DEFAULT_OUTPUT_ID = 'default';
 export const MAX_MONITOR_DELAY_MS = 3000;
 export const VOICE_THRESHOLD = 0.055;
 export const SIGNAL_THRESHOLD = 0.003;
-export const HOT_THRESHOLD = 0.55;
+export const HOT_THRESHOLD = 0.9;
 
 export type PermissionState = 'idle' | 'granted' | 'blocked';
 export type RoutedMode = 'clip' | 'idle' | 'monitor' | 'speakerTest';
