@@ -2,12 +2,9 @@
 
 import {
   AppHeader,
-  DevicePanel,
-  InputProcessingPanel,
-  MonitorPanel,
-  RecordingPanel,
+  InputLane,
+  OutputLane,
   SessionStatusPanel,
-  SpeakerTestPanel,
   UnsupportedPanel,
 } from '@/components/panels';
 import { useSoundCheck } from '@/utils/useSoundCheck';
@@ -26,15 +23,9 @@ export default function HomePage() {
           <UnsupportedPanel />
         ) : (
           <>
-            <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-              <DevicePanel soundCheck={controller} />
-              <InputProcessingPanel soundCheck={controller} />
-            </section>
-
-            <section className="grid gap-4 lg:grid-cols-3">
-              <SpeakerTestPanel soundCheck={controller} />
-              <MonitorPanel soundCheck={controller} />
-              <RecordingPanel soundCheck={controller} />
+            <section className="grid gap-4 lg:grid-cols-2">
+              <InputLane soundCheck={controller} />
+              <OutputLane soundCheck={controller} />
             </section>
 
             <SessionStatusPanel soundCheck={controller} />
