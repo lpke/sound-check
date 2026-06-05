@@ -1,0 +1,71 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-background: #f7f8fa;
+  --color-foreground: #1e2329;
+  --color-muted: #66707c;
+  --color-panel: #ffffff;
+  --color-panel-soft: #eef2f5;
+  --color-panel-strong: #dfe6ec;
+  --color-line: #d6dde5;
+  --color-control: #0f766e;
+  --color-control-hover: #115e59;
+  --color-control-soft: #d9f3ef;
+  --color-on-control: #ffffff;
+  --color-warning: #b45309;
+  --color-warning-soft: #fff3d6;
+  --color-danger: #b42318;
+  --color-danger-soft: #ffe4df;
+  --color-violet: #635bff;
+  --color-violet-soft: #e7e5ff;
+  --color-signal: #16a34a;
+  --color-signal-soft: #dff8e7;
+
+  --font-headline: 'Space Grotesk', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --radius-DEFAULT: 0.5rem;
+  --radius-sm: 0.25rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.5rem;
+  --radius-full: 9999px;
+}
+
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+  background: var(--color-background);
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background:
+    linear-gradient(180deg, rgba(238, 242, 245, 0.88), transparent 22rem),
+    var(--color-background);
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button:disabled,
+input:disabled,
+select:disabled {
+  cursor: not-allowed;
+}
+
+::selection {
+  color: var(--color-on-control);
+  background: var(--color-control);
+}
