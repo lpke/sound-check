@@ -107,9 +107,6 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
   const isOutputStopped = soundCheck.appPaused || soundCheck.outputMuted;
   const testKind = soundCheck.speakerTestSettings.kind;
   const needsFrequency = usesToneFrequency(testKind);
-  const needsFile =
-    testKind === 'music' &&
-    soundCheck.speakerTestSettings.musicSource === 'file';
   const isSpeakerTestActive = soundCheck.routedMode === 'speakerTest';
   const isOutputBusy =
     soundCheck.routedMode !== 'idle' && soundCheck.routedMode !== 'speakerTest';
@@ -250,28 +247,29 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
               />
             ) : null}
 
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outputPrimary"
-                onClick={soundCheck.startSpeakerTest}
-                disabled={
-                  soundCheck.appPaused ||
-                  soundCheck.outputMuted ||
-                  isOutputBusy ||
-                  (needsFile && !soundCheck.speakerTestSettings.musicFile)
-                }
-              >
-                {testKind === 'music' ? 'Play music' : 'Play test sound'}
-              </Button>
-              {isSpeakerTestActive && !soundCheck.appPaused ? (
+            {testKind !== 'music' ? (
+              <div className="flex flex-wrap gap-2">
                 <Button
-                  variant="outputSecondary"
-                  onClick={soundCheck.stopOutputGraph}
+                  variant="outputPrimary"
+                  onClick={soundCheck.startSpeakerTest}
+                  disabled={
+                    soundCheck.appPaused ||
+                    soundCheck.outputMuted ||
+                    isOutputBusy
+                  }
                 >
-                  Stop
+                  Play test sound
                 </Button>
-              ) : null}
-            </div>
+                {isSpeakerTestActive && !soundCheck.appPaused ? (
+                  <Button
+                    variant="outputSecondary"
+                    onClick={soundCheck.stopOutputGraph}
+                  >
+                    Stop
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </SettingsGroup>
 
@@ -656,11 +654,16 @@ function MusicConfig({
   const { durationSeconds, isPlaying, markSeconds, positionSeconds } =
     soundCheck.musicPlayback;
   const hasLoadedMusic = durationSeconds > 0;
+  const needsFile =
+    soundCheck.speakerTestSettings.musicSource === 'file' &&
+    !soundCheck.speakerTestSettings.musicFile;
   const canUseTransport =
     soundCheck.speakerTestSettings.kind === 'music' &&
     !soundCheck.appPaused &&
     !soundCheck.outputMuted &&
-    (hasLoadedMusic || soundCheck.routedMode === 'speakerTest');
+    !needsFile &&
+    (soundCheck.routedMode === 'idle' ||
+      soundCheck.routedMode === 'speakerTest');
 
   return (
     <div className="grid gap-4">
@@ -692,58 +695,71 @@ function MusicConfig({
         </div>
       ) : null}
 
-      {hasLoadedMusic || positionSeconds > 0 ? (
-        <div className="grid gap-3">
+      <div className="border-line bg-panel grid gap-3 rounded-lg border p-3">
+        <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
+          <button
+            type="button"
+            aria-label={isPlaying ? 'Pause music' : 'Play music'}
+            title={isPlaying ? 'Pause music' : 'Play music'}
+            onClick={soundCheck.toggleMusicPlayback}
+            disabled={!canUseTransport}
+            className="bg-output text-on-control hover:bg-output/90 flex h-12 w-12 shrink-0 items-center justify-center rounded-full shadow-[0_8px_22px_rgba(26,89,168,0.2)] transition focus:outline-none active:translate-y-px active:scale-95 disabled:opacity-45 disabled:shadow-none disabled:active:translate-y-0 disabled:active:scale-100"
+          >
+            {isPlaying ? (
+              <PauseIcon aria-hidden="true" className="h-5 w-5" />
+            ) : (
+              <PlayIcon aria-hidden="true" className="h-5 w-5 translate-x-px" />
+            )}
+          </button>
+
           <div className="grid gap-2">
             <div className="text-muted flex items-center justify-between gap-3 text-xs font-semibold">
               <span>{formatSeconds(positionSeconds)}</span>
-              <span>{formatSeconds(durationSeconds)}</span>
+              <span>
+                {hasLoadedMusic ? formatSeconds(durationSeconds) : '--:--.-'}
+              </span>
             </div>
             <input
               aria-label="Music playback position"
               type="range"
               min={0}
-              max={durationSeconds || 0}
+              max={durationSeconds || 1}
               step={0.05}
-              value={clamp(positionSeconds, 0, durationSeconds || 0)}
+              value={
+                hasLoadedMusic ? clamp(positionSeconds, 0, durationSeconds) : 0
+              }
+              disabled={!hasLoadedMusic}
               onChange={(event) =>
                 soundCheck.handleMusicSeek(Number(event.target.value))
               }
               className={rangeClassName('output')}
             />
           </div>
-
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outputSecondary"
-              onClick={soundCheck.toggleMusicPlayback}
-              disabled={!canUseTransport}
-            >
-              {isPlaying ? 'Pause music' : 'Play music'}
-            </Button>
-            <Button
-              variant="outputSecondary"
-              onClick={soundCheck.markMusicPosition}
-              disabled={!hasLoadedMusic}
-            >
-              Mark part
-            </Button>
-            {markSeconds !== null ? (
-              <Button
-                variant="outputSecondary"
-                onClick={soundCheck.playMusicFromMark}
-                disabled={
-                  soundCheck.appPaused ||
-                  soundCheck.outputMuted ||
-                  !hasLoadedMusic
-                }
-              >
-                Jump to {formatSeconds(markSeconds)}
-              </Button>
-            ) : null}
-          </div>
         </div>
-      ) : null}
+
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outputSecondary"
+            onClick={soundCheck.markMusicPosition}
+            disabled={!hasLoadedMusic}
+          >
+            Mark part
+          </Button>
+          {markSeconds !== null ? (
+            <Button
+              variant="outputSecondary"
+              onClick={soundCheck.playMusicFromMark}
+              disabled={
+                soundCheck.appPaused ||
+                soundCheck.outputMuted ||
+                !hasLoadedMusic
+              }
+            >
+              Jump to {formatSeconds(markSeconds)}
+            </Button>
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }
