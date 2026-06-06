@@ -703,7 +703,16 @@ function MusicConfig({
       </div>
 
       {visibleMarks.length > 0 ? (
-        <HelpTip label="Use marks" placement="top-start">
+        <HelpTip
+          className={joinClasses(
+            'block',
+            isHelpModeActive &&
+              'mb-10 transition-[margin] duration-200 ease-out',
+          )}
+          label="Use marks"
+          lockedPlacement
+          placement="bottom-start"
+        >
           <div className="flex flex-wrap gap-2">
             {visibleMarks.map((mark) => (
               <span

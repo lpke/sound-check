@@ -1,35 +1,10 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type ChangeEvent,
-  type ReactNode,
-} from 'react';
+import { useState, type ChangeEvent, type ReactNode } from 'react';
 import { getDeviceLabel } from '@/utils/devices';
 import type { AudioDevice, SectionSignalState } from '@/utils/types';
 import { clamp, joinClasses } from '@/utils/utils';
 import type { IconComponent, SectionAccent } from './componentTypes';
 import { HelpTip, useHelpMode } from './HelpMode';
 import { ChevronDownIcon, RefreshIcon } from './icons';
-
-const MOBILE_IO_STICKY_MEDIA_QUERY = '(max-width: 639px)';
-const IO_STICKY_BOTTOM_BUFFER_PX = 168;
-
-type StickyState = {
-  height: number;
-  isSticky: boolean;
-  left: number;
-  top: number;
-  width: number;
-};
-
-const defaultStickyState: StickyState = {
-  height: 0,
-  isSticky: false,
-  left: 0,
-  top: 0,
-  width: 0,
-};
 
 export function SectionShell({
   children,
@@ -44,8 +19,8 @@ export function SectionShell({
     <section
       data-help-boundary="true"
       className={joinClasses(
-        'border-line bg-panel relative rounded-none border-y shadow-[0_18px_48px_rgba(15,23,42,0.08)] sm:rounded-lg sm:border',
-        isHelpModeActive ? 'overflow-visible' : 'overflow-hidden',
+        'border-line bg-panel relative overflow-visible rounded-none border-y shadow-[0_18px_48px_rgba(15,23,42,0.08)] sm:rounded-lg sm:border',
+        !isHelpModeActive && 'sm:overflow-hidden',
       )}
     >
       {children}
@@ -58,140 +33,17 @@ export function SectionShell({
 
 export function StickyIoChrome({ children }: { children: ReactNode }) {
   const { isHelpModeActive } = useHelpMode();
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const chromeRef = useRef<HTMLDivElement | null>(null);
-  const [stickyState, setStickyState] =
-    useState<StickyState>(defaultStickyState);
-
-  useEffect(() => {
-    const mobileQuery = window.matchMedia(MOBILE_IO_STICKY_MEDIA_QUERY);
-    const visualViewport = window.visualViewport;
-    let frame: number | null = null;
-
-    const updateStickyState = () => {
-      frame = null;
-
-      const container = containerRef.current;
-      const chrome = chromeRef.current;
-      const section = container?.closest('section');
-
-      if (
-        isHelpModeActive ||
-        !mobileQuery.matches ||
-        !(container instanceof HTMLElement) ||
-        !(chrome instanceof HTMLElement) ||
-        !(section instanceof HTMLElement)
-      ) {
-        setStickyState((currentState) => {
-          if (isSameStickyState(currentState, defaultStickyState)) {
-            return currentState;
-          }
-
-          return defaultStickyState;
-        });
-        return;
-      }
-
-      const sectionRect = section.getBoundingClientRect();
-      const chromeHeight = chrome.getBoundingClientRect().height;
-      const viewportTopOffset = getVisualViewportTopOffset();
-      const sectionHasReachedTop = sectionRect.top <= viewportTopOffset;
-      const hasEnoughSectionBelow =
-        sectionRect.bottom >=
-        viewportTopOffset + chromeHeight + IO_STICKY_BOTTOM_BUFFER_PX;
-      const shouldStick = sectionHasReachedTop && hasEnoughSectionBelow;
-
-      const nextStickyState = {
-        height: chromeHeight,
-        isSticky: shouldStick,
-        left: sectionRect.left,
-        top: viewportTopOffset,
-        width: sectionRect.width,
-      };
-
-      setStickyState((currentState) =>
-        isSameStickyState(currentState, nextStickyState)
-          ? currentState
-          : nextStickyState,
-      );
-    };
-
-    const scheduleStickyUpdate = () => {
-      if (frame !== null) {
-        return;
-      }
-
-      frame = window.requestAnimationFrame(updateStickyState);
-    };
-
-    scheduleStickyUpdate();
-    mobileQuery.addEventListener('change', scheduleStickyUpdate);
-    visualViewport?.addEventListener('resize', scheduleStickyUpdate);
-    visualViewport?.addEventListener('scroll', scheduleStickyUpdate, {
-      passive: true,
-    });
-    window.addEventListener('scroll', scheduleStickyUpdate, { passive: true });
-    window.addEventListener('resize', scheduleStickyUpdate);
-
-    return () => {
-      if (frame !== null) {
-        window.cancelAnimationFrame(frame);
-      }
-
-      mobileQuery.removeEventListener('change', scheduleStickyUpdate);
-      visualViewport?.removeEventListener('resize', scheduleStickyUpdate);
-      visualViewport?.removeEventListener('scroll', scheduleStickyUpdate);
-      window.removeEventListener('scroll', scheduleStickyUpdate);
-      window.removeEventListener('resize', scheduleStickyUpdate);
-    };
-  }, [isHelpModeActive]);
 
   return (
     <div
-      ref={containerRef}
-      className="transition-[margin] duration-200 ease-out"
+      className={joinClasses(
+        'transition-[margin] duration-200 ease-out',
+        !isHelpModeActive &&
+          'mobile-safe-area-sticky-top sticky z-[35] sm:static sm:z-auto',
+      )}
     >
-      {stickyState.isSticky ? (
-        <div aria-hidden="true" style={{ height: stickyState.height }} />
-      ) : null}
-      <div
-        ref={chromeRef}
-        className={joinClasses(
-          stickyState.isSticky &&
-            'border-line overflow-hidden border-x border-b shadow-[0_18px_42px_rgba(15,23,42,0.18)] sm:rounded-b-lg',
-        )}
-        style={
-          stickyState.isSticky
-            ? {
-                left: stickyState.left,
-                position: 'fixed',
-                top: `calc(${stickyState.top}px + env(safe-area-inset-top, 0px))`,
-                width: stickyState.width,
-                zIndex: 35,
-              }
-            : undefined
-        }
-      >
-        {children}
-      </div>
+      <div className="overflow-hidden">{children}</div>
     </div>
-  );
-}
-
-function getVisualViewportTopOffset() {
-  return Math.max(0, window.visualViewport?.offsetTop ?? 0);
-}
-
-function isSameStickyState(
-  currentState: StickyState,
-  nextStickyState: StickyState,
-) {
-  return (
-    currentState.height === nextStickyState.height &&
-    currentState.isSticky === nextStickyState.isSticky &&
-    currentState.left === nextStickyState.left &&
-    currentState.top === nextStickyState.top &&
-    currentState.width === nextStickyState.width
   );
 }
 
@@ -270,10 +122,10 @@ export function SectionHeader({
         </button>
       </HelpTip>
       <HelpTip
-        bubbleClassName="w-[7.75rem] whitespace-normal"
+        activeClassName="z-[70]"
+        bubbleClassName="whitespace-nowrap"
         label="Click for more devices"
-        lockedPlacement
-        placement="bottom"
+        placement="bottom-start"
         showBubble={accent === 'input'}
         className="max-w-full min-w-44 justify-self-start"
       >

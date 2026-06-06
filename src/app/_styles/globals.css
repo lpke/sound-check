@@ -77,6 +77,13 @@ button:not(:disabled):not([tabindex='-1']),
   cursor: pointer;
 }
 
+@media (max-width: 639px) {
+  .mobile-safe-area-sticky-top {
+    top: 0;
+    top: env(safe-area-inset-top, 0px);
+  }
+}
+
 @keyframes help-fade-in {
   from {
     opacity: 0;
