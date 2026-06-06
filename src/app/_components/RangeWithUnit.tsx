@@ -2,6 +2,7 @@ import { useRef, useState, type PointerEvent } from 'react';
 import { clamp, joinClasses } from '@/utils/utils';
 import type { SectionAccent } from './componentTypes';
 import { numberInputClassName } from './controlStyles';
+import { HelpTip } from './HelpMode';
 import { Field } from './ui';
 
 const LOG_SCALE_POWER = 1.2;
@@ -223,39 +224,45 @@ export function RangeWithUnit({
           {unit}
         </span>
       </div>
-      <div
-        className="relative touch-none select-none"
-        onPointerCancel={handleRangePointerEnd}
-        onPointerDownCapture={handleRangePointerDown}
-        onPointerMove={handleRangePointerMove}
-        onPointerUp={handleRangePointerEnd}
+      <HelpTip
+        className="block rounded-b-lg"
+        label={`Drag ${label.toLowerCase()}`}
+        placement="top-start"
       >
-        <span
-          aria-hidden="true"
-          className="absolute right-0 bottom-0 left-0 h-3 rounded-b-[calc(var(--radius-lg)-1px)]"
-          style={{
-            background: `linear-gradient(to right, ${fillColor} ${fillPercent}%, var(--color-line) ${fillPercent}%)`,
-          }}
-        />
-        <input
-          ref={rangeInputRef}
-          id={idBase}
-          name={idBase}
-          type="range"
-          min={sliderMin}
-          max={sliderMax}
-          step={sliderStep}
-          value={sliderValue}
-          onChange={(event) => {
-            commitSliderValue(Number(event.target.value));
-          }}
-          className={rangeBarClassName()}
-        />
         <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 -top-2 -bottom-2 z-20 select-none [@media(pointer:coarse)]:pointer-events-auto"
-        />
-      </div>
+          className="relative touch-none select-none"
+          onPointerCancel={handleRangePointerEnd}
+          onPointerDownCapture={handleRangePointerDown}
+          onPointerMove={handleRangePointerMove}
+          onPointerUp={handleRangePointerEnd}
+        >
+          <span
+            aria-hidden="true"
+            className="absolute right-0 bottom-0 left-0 h-3 rounded-b-[calc(var(--radius-lg)-1px)]"
+            style={{
+              background: `linear-gradient(to right, ${fillColor} ${fillPercent}%, var(--color-line) ${fillPercent}%)`,
+            }}
+          />
+          <input
+            ref={rangeInputRef}
+            id={idBase}
+            name={idBase}
+            type="range"
+            min={sliderMin}
+            max={sliderMax}
+            step={sliderStep}
+            value={sliderValue}
+            onChange={(event) => {
+              commitSliderValue(Number(event.target.value));
+            }}
+            className={rangeBarClassName()}
+          />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 -top-2 -bottom-2 z-20 select-none [@media(pointer:coarse)]:pointer-events-auto"
+          />
+        </div>
+      </HelpTip>
     </div>
   );
 

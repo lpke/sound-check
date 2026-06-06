@@ -6,7 +6,6 @@ import { createPortal } from 'react-dom';
 import { joinClasses } from '@/utils/utils';
 
 const EXIT_MS = 280;
-const MODAL_SHEET_MEDIA_QUERY = '(max-height: 760px)';
 const SCROLL_LOCK_KEYS = new Set([
   'ArrowDown',
   'ArrowUp',
@@ -25,7 +24,9 @@ type ModalChildren = ReactNode | ((props: ModalRenderProps) => ReactNode);
 type ModalProps = {
   children: ModalChildren;
   className?: string;
+  closeWhen?: boolean;
   modalAriaLabel?: string;
+  onOpen?: () => void;
   title?: ReactNode;
   trigger: ReactNode;
   triggerAriaLabel?: string;
@@ -36,7 +37,9 @@ type ModalProps = {
 export function Modal({
   children,
   className,
+  closeWhen = false,
   modalAriaLabel = 'Modal',
+  onOpen,
   title,
   trigger,
   triggerAriaLabel = 'Open modal',
@@ -51,20 +54,31 @@ export function Modal({
   } | null>(null);
   const shouldRestoreFocusRef = useRef(false);
   const [phase, setPhase] = useState<'closed' | 'open' | 'closing'>('closed');
-  const [isSheetModal, setIsSheetModal] = useState(false);
   const isClosing = phase === 'closing';
   const isVisible = phase !== 'closed';
 
   const open = useCallback(() => {
-    setIsSheetModal(getIsSheetModalViewport());
+    onOpen?.();
     setPhase('open');
-  }, []);
+  }, [onOpen]);
 
   const close = useCallback(() => {
     setPhase((currentPhase) =>
       currentPhase === 'open' ? 'closing' : currentPhase,
     );
   }, []);
+
+  useEffect(() => {
+    if (closeWhen && isVisible) {
+      const closeTimer = window.setTimeout(close, 0);
+
+      return () => {
+        window.clearTimeout(closeTimer);
+      };
+    }
+
+    return undefined;
+  }, [close, closeWhen, isVisible]);
 
   useEffect(() => {
     if (phase !== 'closing') {
@@ -89,22 +103,6 @@ export function Modal({
     shouldRestoreFocusRef.current = false;
     triggerRef.current?.focus();
   }, [phase]);
-
-  useEffect(() => {
-    if (!isVisible) {
-      return undefined;
-    }
-
-    const sheetMediaQuery = window.matchMedia(MODAL_SHEET_MEDIA_QUERY);
-    const updateSheetMode = () => setIsSheetModal(sheetMediaQuery.matches);
-
-    updateSheetMode();
-    sheetMediaQuery.addEventListener('change', updateSheetMode);
-
-    return () => {
-      sheetMediaQuery.removeEventListener('change', updateSheetMode);
-    };
-  }, [isVisible]);
 
   useEffect(() => {
     if (!isVisible) {
@@ -231,7 +229,7 @@ export function Modal({
       {isVisible
         ? createPortal(
             <div
-              className="fixed inset-0 z-50 flex items-center justify-center px-3 py-6 sm:px-4 md:py-8"
+              className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto px-3 py-6 sm:px-4 md:py-8"
               data-modal-root
               role="dialog"
               aria-modal="true"
@@ -249,14 +247,6 @@ export function Modal({
                   from { opacity: 1; }
                   to { opacity: 0; }
                 }
-                @keyframes modalSheetIn {
-                  from { opacity: 0; transform: translateY(100%); }
-                  to { opacity: 1; transform: translateY(0); }
-                }
-                @keyframes modalSheetOut {
-                  from { opacity: 1; transform: translateY(0); }
-                  to { opacity: 0; transform: translateY(100%); }
-                }
                 @keyframes modalGrowIn {
                   from { opacity: 0; transform: translateY(10px) scale(0.96); }
                   to { opacity: 1; transform: translateY(0) scale(1); }
@@ -264,22 +254,6 @@ export function Modal({
                 @keyframes modalGrowOut {
                   from { opacity: 1; transform: translateY(0) scale(1); }
                   to { opacity: 0; transform: translateY(8px) scale(0.97); }
-                }
-                @media ${MODAL_SHEET_MEDIA_QUERY} {
-                  [data-modal-root] {
-                    align-items: flex-end;
-                    padding-bottom: 0;
-                  }
-                  [data-modal-panel] {
-                    border-bottom-right-radius: 0;
-                    border-bottom-left-radius: 0;
-                  }
-                  [data-modal-panel][data-modal-state='open'] {
-                    animation-name: modalSheetIn;
-                  }
-                  [data-modal-panel][data-modal-state='closing'] {
-                    animation-name: modalSheetOut;
-                  }
                 }
               `}</style>
               <button
@@ -302,11 +276,10 @@ export function Modal({
                 data-modal-panel
                 data-modal-state={isClosing ? 'closing' : 'open'}
                 className={joinClasses(
-                  'bg-panel border-line relative z-10 flex max-h-[90svh] w-full max-w-3xl transform-gpu flex-col overflow-hidden rounded-lg border shadow-[0_28px_90px_rgba(15,23,42,0.24)] will-change-transform md:max-h-[88vh]',
+                  'bg-panel border-line relative z-10 flex max-h-[calc(100svh-7rem)] w-full max-w-lg transform-gpu flex-col overflow-hidden rounded-lg border shadow-[0_28px_90px_rgba(15,23,42,0.24)] will-change-transform sm:max-h-[90svh] md:max-h-[88vh] md:max-w-3xl',
                   isClosing
                     ? 'animate-[modalGrowOut_220ms_ease-in_both]'
                     : 'animate-[modalGrowIn_260ms_cubic-bezier(0.16,1,0.3,1)_both]',
-                  isSheetModal && 'min-h-[50svh]',
                   className,
                 )}
               >
@@ -384,12 +357,4 @@ function canScroll(scrollContainer: HTMLElement | null, deltaY: number) {
   }
 
   return false;
-}
-
-function getIsSheetModalViewport() {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-
-  return window.matchMedia(MODAL_SHEET_MEDIA_QUERY).matches;
 }

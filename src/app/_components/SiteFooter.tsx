@@ -1,42 +1,25 @@
 import type { SoundCheckController } from '@/utils/useSoundCheck';
-import { joinClasses } from '@/utils/utils';
-import { DebugModal } from './DebugModal';
+import { siteActionButtonClassName } from './siteActionStyles';
 
 export function SiteFooter({
-  soundCheck,
   onRecheckPermission,
 }: {
   soundCheck: SoundCheckController;
   onRecheckPermission?: () => void;
 }) {
   return (
-    <footer className="mt-2 flex items-center justify-between gap-2 pb-1">
-      <div className="flex-1">
-        {onRecheckPermission ? (
-          <button
-            type="button"
-            onClick={onRecheckPermission}
-            className="text-muted/70 hover:text-muted text-sm underline underline-offset-2 transition focus:outline-none"
-          >
-            Recheck permission and refresh devices
-          </button>
-        ) : null}
-      </div>
-      <div className="flex items-center justify-end gap-2">
-        <DebugModal soundCheck={soundCheck} />
+    <footer className="mt-2 flex items-center justify-start gap-2 px-4 pb-1 sm:px-0">
+      {onRecheckPermission ? (
         <button
           type="button"
-          onClick={soundCheck.toggleAllAudio}
-          className={joinClasses(
-            'inline-flex h-10 w-28 items-center justify-center rounded-lg border px-3 text-sm font-semibold whitespace-nowrap transition focus:outline-none active:translate-y-px active:scale-[0.985]',
-            soundCheck.allAudioStopped
-              ? 'border-control bg-control text-on-control hover:bg-control-hover'
-              : 'border-line bg-panel text-foreground hover:bg-panel-soft',
-          )}
+          onClick={onRecheckPermission}
+          className={siteActionButtonClassName({
+            className: 'sm:fixed sm:bottom-6 sm:left-6 sm:z-[75]',
+          })}
         >
-          {soundCheck.allAudioStopped ? 'Resume all' : 'Pause all'}
+          Recheck permissions and refresh devices
         </button>
-      </div>
+      ) : null}
     </footer>
   );
 }

@@ -59,7 +59,7 @@ body {
 button,
 input,
 select {
-  font: inherit;
+  font-family: inherit;
 }
 
 button:disabled,
@@ -76,4 +76,87 @@ button:not(:disabled):not([tabindex='-1']),
 ::selection {
   color: var(--color-on-control);
   background: var(--color-control);
+}
+
+@keyframes help-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes help-highlight-in {
+  from {
+    opacity: 0.82;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+[data-help-tip-shell='true'] .help-tip-bubble {
+  animation: help-tip-pop 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+[data-help-tip-shell='true']:not([data-help-ready='true']) {
+  opacity: 0;
+  pointer-events: none;
+}
+
+[data-help-tip-shell='true'] .help-tip-arrow {
+  position: absolute;
+  width: 0.75rem;
+  height: 0.75rem;
+  border: 1px solid var(--color-line);
+  background: var(--color-panel);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+[data-help-placement='top'] .help-tip-arrow {
+  bottom: -0.375rem;
+  left: var(--help-arrow-left, 1.5rem);
+  margin-left: -0.375rem;
+  border-top: 0;
+  border-left: 0;
+}
+
+[data-help-placement='bottom'] .help-tip-arrow {
+  top: -0.375rem;
+  left: var(--help-arrow-left, 1.5rem);
+  margin-left: -0.375rem;
+  border-right: 0;
+  border-bottom: 0;
+}
+
+[data-help-placement='left'] .help-tip-arrow {
+  top: var(--help-arrow-top, 1.5rem);
+  right: -0.375rem;
+  margin-top: -0.375rem;
+  border-bottom: 0;
+  border-left: 0;
+}
+
+[data-help-placement='right'] .help-tip-arrow {
+  top: var(--help-arrow-top, 1.5rem);
+  left: -0.375rem;
+  margin-top: -0.375rem;
+  border-top: 0;
+  border-right: 0;
+}
+
+@keyframes help-tip-pop {
+  from {
+    opacity: 0;
+    transform: translateY(0.35rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

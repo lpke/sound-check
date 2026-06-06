@@ -1,9 +1,19 @@
-import { useState, type ChangeEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ReactNode,
+} from 'react';
 import { getDeviceLabel } from '@/utils/devices';
 import type { AudioDevice, SectionSignalState } from '@/utils/types';
 import { clamp, joinClasses } from '@/utils/utils';
 import type { IconComponent, SectionAccent } from './componentTypes';
+import { HelpTip, useHelpMode } from './HelpMode';
 import { ChevronDownIcon, RefreshIcon } from './icons';
+
+const MOBILE_IO_STICKY_MEDIA_QUERY = '(max-width: 639px)';
+const IO_STICKY_BOTTOM_BUFFER_PX = 168;
 
 export function SectionShell({
   children,
@@ -12,13 +22,133 @@ export function SectionShell({
   children: ReactNode;
   muted: boolean;
 }) {
+  const { isHelpModeActive } = useHelpMode();
+
   return (
-    <section className="border-line bg-panel relative overflow-hidden rounded-lg border shadow-[0_18px_48px_rgba(15,23,42,0.08)]">
+    <section
+      className={joinClasses(
+        'border-line bg-panel relative rounded-none border-y shadow-[0_18px_48px_rgba(15,23,42,0.08)] sm:rounded-lg sm:border',
+        isHelpModeActive ? 'overflow-visible' : 'overflow-hidden',
+      )}
+    >
       {children}
       {muted ? (
         <div className="pointer-events-none absolute inset-0 z-20 bg-slate-200/35 backdrop-grayscale" />
       ) : null}
     </section>
+  );
+}
+
+export function StickyIoChrome({ children }: { children: ReactNode }) {
+  const { isHelpModeActive } = useHelpMode();
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const chromeRef = useRef<HTMLDivElement | null>(null);
+  const [stickyState, setStickyState] = useState<{
+    height: number;
+    isSticky: boolean;
+    left: number;
+    width: number;
+  }>({
+    height: 0,
+    isSticky: false,
+    left: 0,
+    width: 0,
+  });
+
+  useEffect(() => {
+    const mobileQuery = window.matchMedia(MOBILE_IO_STICKY_MEDIA_QUERY);
+    let frame: number | null = null;
+
+    const updateStickyState = () => {
+      frame = null;
+
+      const container = containerRef.current;
+      const chrome = chromeRef.current;
+      const section = container?.closest('section');
+
+      if (
+        isHelpModeActive ||
+        !mobileQuery.matches ||
+        !(container instanceof HTMLElement) ||
+        !(chrome instanceof HTMLElement) ||
+        !(section instanceof HTMLElement)
+      ) {
+        setStickyState((currentState) =>
+          currentState.isSticky
+            ? { height: 0, isSticky: false, left: 0, width: 0 }
+            : currentState,
+        );
+        return;
+      }
+
+      const sectionRect = section.getBoundingClientRect();
+      const chromeHeight =
+        stickyState.height || chrome.getBoundingClientRect().height;
+      const topOffset = 0;
+      const sectionHasReachedTop = sectionRect.top <= topOffset;
+      const hasEnoughSectionBelow =
+        sectionRect.bottom >=
+        topOffset + chromeHeight + IO_STICKY_BOTTOM_BUFFER_PX;
+      const shouldStick = sectionHasReachedTop && hasEnoughSectionBelow;
+
+      setStickyState({
+        height: chromeHeight,
+        isSticky: shouldStick,
+        left: sectionRect.left,
+        width: sectionRect.width,
+      });
+    };
+
+    const scheduleStickyUpdate = () => {
+      if (frame !== null) {
+        return;
+      }
+
+      frame = window.requestAnimationFrame(updateStickyState);
+    };
+
+    scheduleStickyUpdate();
+    mobileQuery.addEventListener('change', scheduleStickyUpdate);
+    window.addEventListener('scroll', scheduleStickyUpdate, { passive: true });
+    window.addEventListener('resize', scheduleStickyUpdate);
+
+    return () => {
+      if (frame !== null) {
+        window.cancelAnimationFrame(frame);
+      }
+
+      mobileQuery.removeEventListener('change', scheduleStickyUpdate);
+      window.removeEventListener('scroll', scheduleStickyUpdate);
+      window.removeEventListener('resize', scheduleStickyUpdate);
+    };
+  }, [isHelpModeActive, stickyState.height]);
+
+  return (
+    <div ref={containerRef}>
+      {stickyState.isSticky ? (
+        <div aria-hidden="true" style={{ height: stickyState.height }} />
+      ) : null}
+      <div
+        ref={chromeRef}
+        className={joinClasses(
+          stickyState.isSticky &&
+            'border-line overflow-hidden border-x border-b shadow-[0_18px_42px_rgba(15,23,42,0.18)] sm:rounded-b-lg',
+        )}
+        style={
+          stickyState.isSticky
+            ? {
+                left: stickyState.left,
+                position: 'fixed',
+                top: 0,
+                width: stickyState.width,
+                zIndex: 35,
+              }
+            : undefined
+        }
+      >
+        {children}
+      </div>
+    </div>
   );
 }
 
@@ -68,22 +198,30 @@ export function SectionHeader({
         accent === 'output' && 'bg-output-soft',
       )}
     >
-      <button
-        type="button"
-        aria-label={toggleLabel}
-        title={toggleLabel}
-        onClick={onToggleMute}
-        className={joinClasses(
-          'flex h-11 w-11 shrink-0 items-center justify-center rounded-full border text-white transition focus:outline-none active:translate-y-px active:scale-95',
-          muted
-            ? 'border-line bg-muted/55'
-            : accent === 'input'
-              ? 'border-input bg-input hover:bg-input/90'
-              : 'border-output bg-output hover:bg-output/90',
-        )}
+      <HelpTip
+        activeClassName="z-[70]"
+        className="h-11 w-11 shrink-0"
+        highlightClassName="rounded-full"
+        label={accent === 'input' ? 'Mute input' : 'Mute output'}
+        placement="bottom-start"
       >
-        <Icon aria-hidden="true" className="h-5 w-5" />
-      </button>
+        <button
+          type="button"
+          aria-label={toggleLabel}
+          title={toggleLabel}
+          onClick={onToggleMute}
+          className={joinClasses(
+            'flex h-11 w-11 shrink-0 items-center justify-center rounded-full border text-white transition focus:outline-none active:translate-y-px active:scale-95',
+            muted
+              ? 'border-line bg-muted/55'
+              : accent === 'input'
+                ? 'border-input bg-input hover:bg-input/90'
+                : 'border-output bg-output hover:bg-output/90',
+          )}
+        >
+          <Icon aria-hidden="true" className="h-5 w-5" />
+        </button>
+      </HelpTip>
 
       <label className="relative inline-flex max-w-full min-w-44 items-center justify-self-start py-1 pr-10 text-left">
         <span className="sr-only">{selectLabel}</span>

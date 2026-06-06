@@ -1,9 +1,16 @@
-import { useRef, type ChangeEvent, type RefObject } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type RefObject,
+} from 'react';
 import { speakerMusicSources } from '@/utils/speakerMusic';
 import type { SpeakerMusicSource, SpeakerTestKind } from '@/utils/types';
 import { formatSeconds, joinClasses } from '@/utils/utils';
 import type { SoundCheckProps } from './componentTypes';
 import { controlClassName } from './controlStyles';
+import { HelpTip, useHelpMode } from './HelpMode';
 import {
   BookmarkIcon,
   ChevronDownIcon,
@@ -13,7 +20,7 @@ import {
 } from './icons';
 import { AudioPlaybackControls, PlaybackIconButton } from './playbackControls';
 import { RangeWithUnit } from './RangeWithUnit';
-import { SectionHeader, SectionShell } from './sectionChrome';
+import { SectionHeader, SectionShell, StickyIoChrome } from './sectionChrome';
 import { SettingsGroup } from './settingsGroup';
 import { Button, Field, LevelMeter } from './ui';
 
@@ -22,6 +29,12 @@ const speakerTestOptions: { kind: SpeakerTestKind; label: string }[] = [
   { kind: 'modulatedTone', label: 'Modulating tone' },
   { kind: 'sweep', label: 'Frequency sweep' },
   { kind: 'music', label: 'Music' },
+];
+const HELP_DEMO_RECORDING_DURATION_SECONDS = 5;
+const HELP_DEMO_MUSIC_DURATION_SECONDS = 96;
+const defaultHelpDemoMusicMarks = [
+  { id: 'help-demo-music-mark-1', seconds: 18 },
+  { id: 'help-demo-music-mark-2', seconds: 47 },
 ];
 
 export function OutputSection({ soundCheck }: SoundCheckProps) {
@@ -50,30 +63,32 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
 
   return (
     <SectionShell muted={isOutputStopped}>
-      <SectionHeader
-        accent="output"
-        devices={soundCheck.outputDevices}
-        deviceKind="audiooutput"
-        disabled={!soundCheck.canRouteOutput}
-        emptyLabel="No speaker detected"
-        icon={SpeakerIcon}
-        muted={isOutputStopped}
-        onDeviceChange={soundCheck.handleOutputChange}
-        onRefresh={soundCheck.refreshDevices}
-        onToggleMute={soundCheck.toggleOutputMute}
-        selectedDeviceId={soundCheck.selectedOutputId}
-        selectedDeviceName={soundCheck.selectedOutputName}
-        selectLabel="Speaker device"
-        signalLevel={soundCheck.outputLevel}
-        signalState={soundCheck.outputSignalState}
-        toggleLabel={isOutputStopped ? 'Unmute speaker' : 'Mute speaker'}
-      />
-      <LevelMeter
-        accent="output"
-        level={soundCheck.outputLevel}
-        spectrum={soundCheck.outputSpectrum}
-        spectrumPeaks={soundCheck.outputSpectrumPeaks}
-      />
+      <StickyIoChrome>
+        <SectionHeader
+          accent="output"
+          devices={soundCheck.outputDevices}
+          deviceKind="audiooutput"
+          disabled={!soundCheck.canRouteOutput}
+          emptyLabel="No speaker detected"
+          icon={SpeakerIcon}
+          muted={isOutputStopped}
+          onDeviceChange={soundCheck.handleOutputChange}
+          onRefresh={soundCheck.refreshDevices}
+          onToggleMute={soundCheck.toggleOutputMute}
+          selectedDeviceId={soundCheck.selectedOutputId}
+          selectedDeviceName={soundCheck.selectedOutputName}
+          selectLabel="Speaker device"
+          signalLevel={soundCheck.outputLevel}
+          signalState={soundCheck.outputSignalState}
+          toggleLabel={isOutputStopped ? 'Unmute speaker' : 'Mute speaker'}
+        />
+        <LevelMeter
+          accent="output"
+          level={soundCheck.outputLevel}
+          spectrum={soundCheck.outputSpectrum}
+          spectrumPeaks={soundCheck.outputSpectrumPeaks}
+        />
+      </StickyIoChrome>
 
       <div className="grid gap-4 p-4 sm:p-5">
         {soundCheck.canRequestOutput ? (
@@ -178,95 +193,178 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
 }
 
 function RecordingPlayback({ soundCheck }: SoundCheckProps) {
+  const { isHelpModeActive } = useHelpMode();
+  const shouldShowHelpDemo =
+    isHelpModeActive && soundCheck.recordedClips.length === 0;
+
   return (
     <SettingsGroup title="Recorded playback">
-      <div className="grid gap-2">
-        {soundCheck.recordedClips.length === 0 ? (
-          <p className="text-muted text-sm">No recordings yet.</p>
-        ) : (
-          soundCheck.recordedClips.map((clip, index) => {
-            const isActive =
-              soundCheck.recordedPlayback.activeClipId === clip.id;
-            const isPlaying = isActive && soundCheck.recordedPlayback.isPlaying;
-            const positionSeconds =
-              soundCheck.recordedPlayback.positionsByClipId[clip.id] ?? 0;
-            const recordingName = clip.name || 'Recording';
+      <HelpTip label="Play clips" placement="top-start">
+        <div className="grid gap-2">
+          {shouldShowHelpDemo ? (
+            <HelpDemoRecordedClip />
+          ) : soundCheck.recordedClips.length === 0 ? (
+            <p className="text-muted text-sm">No recordings yet.</p>
+          ) : (
+            soundCheck.recordedClips.map((clip, index) => {
+              const isActive =
+                soundCheck.recordedPlayback.activeClipId === clip.id;
+              const isPlaying =
+                isActive && soundCheck.recordedPlayback.isPlaying;
+              const positionSeconds =
+                soundCheck.recordedPlayback.positionsByClipId[clip.id] ?? 0;
+              const recordingName = clip.name || 'Recording';
 
-            return (
-              <div key={clip.id} className="contents">
-                <div className="grid gap-3 py-2">
-                  <div className="grid gap-2">
-                    <input
-                      id={`recorded-clip-name-${clip.id}`}
-                      name={`recorded-clip-name-${clip.id}`}
-                      type="text"
-                      value={clip.name}
-                      onChange={(event) =>
-                        soundCheck.renameRecordedClip(
-                          clip.id,
-                          event.target.value,
-                        )
-                      }
-                      onFocus={() => soundCheck.selectRecordedClip(clip.id)}
-                      onPointerDown={() =>
-                        soundCheck.selectRecordedClip(clip.id)
-                      }
-                      placeholder="Recording"
-                      aria-label="Rename recording"
-                      title="Rename recording"
-                      className="text-foreground focus:border-b-output h-7 min-w-0 border-b border-transparent bg-transparent px-0 text-sm leading-tight transition focus:ring-0 focus:outline-none"
-                    />
-                    <span
-                      className="text-muted block text-xs"
-                      title={clip.inputDeviceName}
-                    >
-                      Device: {clip.inputDeviceName}
-                    </span>
-                  </div>
-                  <AudioPlaybackControls
-                    buttonLabel={
-                      isPlaying
-                        ? `Pause ${recordingName}`
-                        : `Play ${recordingName}`
-                    }
-                    canUseTransport={
-                      !soundCheck.appPaused &&
-                      !soundCheck.outputMuted &&
-                      clip.durationSeconds > 0
-                    }
-                    durationSeconds={clip.durationSeconds}
-                    isPlaying={isPlaying}
-                    onSeek={(nextPosition) => {
-                      soundCheck.selectRecordedClip(clip.id);
-                      soundCheck.handleRecordedClipSeek(clip.id, nextPosition);
-                    }}
-                    onToggle={() => {
-                      soundCheck.selectRecordedClip(clip.id);
-                      soundCheck.toggleRecordedClipPlayback(clip.id);
-                    }}
-                    positionSeconds={positionSeconds}
-                    sideControls={
-                      <PlaybackIconButton
-                        label={`Delete ${recordingName}`}
-                        onClick={() => soundCheck.deleteRecordedClip(clip.id)}
-                        tone="danger"
+              return (
+                <div key={clip.id} className="contents">
+                  <div className="grid gap-3 py-2">
+                    <div className="grid gap-2">
+                      <input
+                        id={`recorded-clip-name-${clip.id}`}
+                        name={`recorded-clip-name-${clip.id}`}
+                        type="text"
+                        value={clip.name}
+                        onChange={(event) =>
+                          soundCheck.renameRecordedClip(
+                            clip.id,
+                            event.target.value,
+                          )
+                        }
+                        onFocus={() => soundCheck.selectRecordedClip(clip.id)}
+                        onPointerDown={() =>
+                          soundCheck.selectRecordedClip(clip.id)
+                        }
+                        placeholder="Recording"
+                        aria-label="Rename recording"
+                        title="Rename recording"
+                        className="text-foreground focus:border-b-output h-7 min-w-0 border-b border-transparent bg-transparent px-0 text-sm leading-tight transition focus:ring-0 focus:outline-none"
+                      />
+                      <span
+                        className="text-muted block text-xs"
+                        title={clip.inputDeviceName}
                       >
-                        <TrashIcon aria-hidden="true" className="h-5 w-5" />
-                      </PlaybackIconButton>
-                    }
-                    seekLabel={`${recordingName} playback position`}
-                    seekName={`recorded-clip-position-${clip.id}`}
-                  />
+                        Device: {clip.inputDeviceName}
+                      </span>
+                    </div>
+                    <AudioPlaybackControls
+                      buttonLabel={
+                        isPlaying
+                          ? `Pause ${recordingName}`
+                          : `Play ${recordingName}`
+                      }
+                      canUseTransport={
+                        !soundCheck.appPaused &&
+                        !soundCheck.outputMuted &&
+                        clip.durationSeconds > 0
+                      }
+                      durationSeconds={clip.durationSeconds}
+                      isPlaying={isPlaying}
+                      onSeek={(nextPosition) => {
+                        soundCheck.selectRecordedClip(clip.id);
+                        soundCheck.handleRecordedClipSeek(
+                          clip.id,
+                          nextPosition,
+                        );
+                      }}
+                      onToggle={() => {
+                        soundCheck.selectRecordedClip(clip.id);
+                        soundCheck.toggleRecordedClipPlayback(clip.id);
+                      }}
+                      positionSeconds={positionSeconds}
+                      sideControls={
+                        <PlaybackIconButton
+                          label={`Delete ${recordingName}`}
+                          onClick={() => soundCheck.deleteRecordedClip(clip.id)}
+                          tone="danger"
+                        >
+                          <TrashIcon aria-hidden="true" className="h-5 w-5" />
+                        </PlaybackIconButton>
+                      }
+                      seekLabel={`${recordingName} playback position`}
+                      seekName={`recorded-clip-position-${clip.id}`}
+                    />
+                  </div>
+                  {index < soundCheck.recordedClips.length - 1 ? (
+                    <hr className="border-line -mx-1 mt-2 border-t" />
+                  ) : null}
                 </div>
-                {index < soundCheck.recordedClips.length - 1 ? (
-                  <hr className="border-line -mx-1 mt-2 border-t" />
-                ) : null}
-              </div>
-            );
-          })
-        )}
-      </div>
+              );
+            })
+          )}
+        </div>
+      </HelpTip>
     </SettingsGroup>
+  );
+}
+
+function HelpDemoRecordedClip() {
+  const [name, setName] = useState('Help demo recording');
+  const [positionSeconds, setPositionSeconds] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  useEffect(() => {
+    if (!isPlaying) {
+      return undefined;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setPositionSeconds((currentPosition) => {
+        const nextPosition = Math.min(
+          HELP_DEMO_RECORDING_DURATION_SECONDS,
+          currentPosition + 0.1,
+        );
+
+        if (nextPosition >= HELP_DEMO_RECORDING_DURATION_SECONDS) {
+          setIsPlaying(false);
+        }
+
+        return nextPosition;
+      });
+    }, 100);
+
+    return () => window.clearInterval(intervalId);
+  }, [isPlaying]);
+
+  return (
+    <div className="grid gap-3 py-2">
+      <div className="grid gap-2">
+        <input
+          id="help-demo-recorded-clip-name"
+          name="help-demo-recorded-clip-name"
+          type="text"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="Recording"
+          aria-label="Rename demo recording"
+          title="Rename demo recording"
+          className="text-foreground focus:border-b-output h-7 min-w-0 border-b border-transparent bg-transparent px-0 text-sm leading-tight transition focus:ring-0 focus:outline-none"
+        />
+        <span className="text-muted block text-xs">
+          Device: Help mode sample
+        </span>
+      </div>
+      <AudioPlaybackControls
+        buttonLabel={isPlaying ? `Pause ${name}` : `Play ${name}`}
+        canUseTransport
+        durationSeconds={HELP_DEMO_RECORDING_DURATION_SECONDS}
+        isPlaying={isPlaying}
+        onSeek={setPositionSeconds}
+        onToggle={() => setIsPlaying((current) => !current)}
+        positionSeconds={positionSeconds}
+        sideControls={
+          <PlaybackIconButton
+            disabled
+            label="Demo recording cannot be deleted"
+            onClick={() => undefined}
+            tone="danger"
+          >
+            <TrashIcon aria-hidden="true" className="h-5 w-5" />
+          </PlaybackIconButton>
+        }
+        seekLabel="Demo recording playback position"
+        seekName="help-demo-recorded-clip-position"
+      />
+    </div>
   );
 }
 
@@ -278,9 +376,28 @@ function MusicConfig({
   musicFileInputRef: RefObject<HTMLInputElement | null>;
   onMusicSourceChange: (event: ChangeEvent<HTMLSelectElement>) => void;
 }) {
+  const { isHelpModeActive } = useHelpMode();
   const { durationSeconds, isLoading, isPlaying, marks, positionSeconds } =
     soundCheck.musicPlayback;
+  const [demoMusicMarks, setDemoMusicMarks] = useState(
+    defaultHelpDemoMusicMarks,
+  );
+  const [demoMusicPositionSeconds, setDemoMusicPositionSeconds] = useState(32);
   const hasLoadedMusic = durationSeconds > 0;
+  const shouldUseDemoMusic =
+    isHelpModeActive && !hasLoadedMusic && marks.length === 0;
+  const effectiveDurationSeconds = shouldUseDemoMusic
+    ? HELP_DEMO_MUSIC_DURATION_SECONDS
+    : durationSeconds;
+  const effectivePositionSeconds = shouldUseDemoMusic
+    ? demoMusicPositionSeconds
+    : positionSeconds;
+  const visibleMarks =
+    marks.length > 0
+      ? marks.map((mark) => ({ ...mark, isDemo: false }))
+      : isHelpModeActive
+        ? demoMusicMarks.map((mark) => ({ ...mark, isDemo: true }))
+        : [];
   const needsFile =
     soundCheck.speakerTestSettings.musicSource === 'file' &&
     !soundCheck.speakerTestSettings.musicFile;
@@ -338,63 +455,111 @@ function MusicConfig({
         }
         canUseTransport={canUseTransport}
         centerControls={
-          <PlaybackIconButton
-            disabled={!hasLoadedMusic}
-            label="Mark current position"
-            onClick={soundCheck.markMusicPosition}
-            className="mr-1 -ml-2.5 !h-8 !w-8 hover:scale-95"
-            tone="output"
-          >
-            <BookmarkIcon aria-hidden="true" className="h-5 w-5" />
-          </PlaybackIconButton>
+          <HelpTip label="Add mark" placement="top-start">
+            <PlaybackIconButton
+              disabled={!hasLoadedMusic && !isHelpModeActive}
+              label="Mark current position"
+              onClick={() => {
+                if (hasLoadedMusic) {
+                  soundCheck.markMusicPosition();
+                  return;
+                }
+
+                const nextMarkSeconds = Math.min(
+                  HELP_DEMO_MUSIC_DURATION_SECONDS,
+                  demoMusicPositionSeconds,
+                );
+
+                setDemoMusicMarks((currentMarks) => [
+                  ...currentMarks,
+                  {
+                    id: `help-demo-music-mark-${Date.now()}`,
+                    seconds: nextMarkSeconds,
+                  },
+                ]);
+              }}
+              className="mr-1 -ml-2.5 !h-8 !w-8 hover:scale-95"
+              tone="output"
+            >
+              <BookmarkIcon aria-hidden="true" className="h-5 w-5" />
+            </PlaybackIconButton>
+          </HelpTip>
         }
-        durationSeconds={durationSeconds}
+        durationSeconds={effectiveDurationSeconds}
         isLoading={isLoading}
         isPlaying={isPlaying}
-        markers={marks.map((mark) => ({
+        markers={visibleMarks.map((mark) => ({
           id: mark.id,
           label: `Mark at ${formatSeconds(mark.seconds)}`,
           seconds: mark.seconds,
         }))}
-        onSeek={soundCheck.handleMusicSeek}
+        onSeek={(nextPosition) => {
+          if (shouldUseDemoMusic) {
+            setDemoMusicPositionSeconds(nextPosition);
+            return;
+          }
+
+          soundCheck.handleMusicSeek(nextPosition);
+        }}
         onToggle={soundCheck.toggleMusicPlayback}
-        positionSeconds={positionSeconds}
+        positionSeconds={effectivePositionSeconds}
         seekLabel="Music playback position"
         seekName="music-playback-position"
       />
 
-      {marks.length > 0 ? (
-        <div className="flex flex-wrap gap-2">
-          {marks.map((mark) => (
-            <span
-              key={mark.id}
-              className="border-output/25 bg-output-soft text-output inline-flex h-9 overflow-hidden rounded-lg border text-xs font-semibold"
-            >
-              <button
-                type="button"
-                className="hover:bg-output-soft/70 flex h-full items-center px-3 font-mono transition focus:outline-none active:translate-y-px active:scale-[0.985] disabled:opacity-50 disabled:active:translate-y-0 disabled:active:scale-100"
-                title={`Play from ${formatSeconds(mark.seconds)}`}
-                onClick={() => soundCheck.playMusicFromMark(mark.seconds)}
-                disabled={
-                  soundCheck.appPaused ||
-                  soundCheck.outputMuted ||
-                  !hasLoadedMusic
-                }
+      {visibleMarks.length > 0 ? (
+        <HelpTip label="Use marks" placement="top-start">
+          <div className="flex flex-wrap gap-2">
+            {visibleMarks.map((mark) => (
+              <span
+                key={mark.id}
+                className="border-output/25 bg-output-soft text-output inline-flex h-9 overflow-hidden rounded-lg border text-xs font-semibold"
               >
-                {formatSeconds(mark.seconds)}
-              </button>
-              <button
-                type="button"
-                aria-label={`Delete mark at ${formatSeconds(mark.seconds)}`}
-                title={`Delete mark at ${formatSeconds(mark.seconds)}`}
-                className="border-output/20 hover:bg-output/8 text-output/60 hover:text-output flex h-full w-8 items-center justify-center border-l transition focus:outline-none active:translate-y-px active:scale-[0.95]"
-                onClick={() => soundCheck.deleteMusicMark(mark.id)}
-              >
-                <XIcon aria-hidden="true" className="h-3.5 w-3.5" />
-              </button>
-            </span>
-          ))}
-        </div>
+                <button
+                  type="button"
+                  className="hover:bg-output-soft/70 flex h-full items-center px-3 font-mono transition focus:outline-none active:translate-y-px active:scale-[0.985] disabled:opacity-50 disabled:active:translate-y-0 disabled:active:scale-100"
+                  title={`Play from ${formatSeconds(mark.seconds)}`}
+                  onClick={() => {
+                    if (mark.isDemo) {
+                      setDemoMusicPositionSeconds(mark.seconds);
+                      return;
+                    }
+
+                    soundCheck.playMusicFromMark(mark.seconds);
+                  }}
+                  disabled={
+                    !mark.isDemo &&
+                    (soundCheck.appPaused ||
+                      soundCheck.outputMuted ||
+                      !hasLoadedMusic)
+                  }
+                >
+                  {formatSeconds(mark.seconds)}
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Delete mark at ${formatSeconds(mark.seconds)}`}
+                  title={`Delete mark at ${formatSeconds(mark.seconds)}`}
+                  className="border-output/20 hover:bg-output/8 text-output/60 hover:text-output flex h-full w-8 items-center justify-center border-l transition focus:outline-none active:translate-y-px active:scale-[0.95]"
+                  onClick={() => {
+                    if (mark.isDemo) {
+                      setDemoMusicMarks((currentMarks) =>
+                        currentMarks.filter(
+                          (currentMark) => currentMark.id !== mark.id,
+                        ),
+                      );
+                      return;
+                    }
+
+                    soundCheck.deleteMusicMark(mark.id);
+                  }}
+                >
+                  <XIcon aria-hidden="true" className="h-3.5 w-3.5" />
+                </button>
+              </span>
+            ))}
+          </div>
+        </HelpTip>
       ) : null}
     </div>
   );

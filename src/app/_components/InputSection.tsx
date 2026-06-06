@@ -2,9 +2,10 @@ import { MAX_MONITOR_DELAY_MS } from '@/utils/types';
 import { formatSeconds } from '@/utils/utils';
 import type { SoundCheckProps } from './componentTypes';
 import { checkboxClassName } from './controlStyles';
+import { HelpTip } from './HelpMode';
 import { MicrophoneIcon } from './icons';
 import { RangeWithUnit } from './RangeWithUnit';
-import { SectionHeader, SectionShell } from './sectionChrome';
+import { SectionHeader, SectionShell, StickyIoChrome } from './sectionChrome';
 import { SettingsGroup } from './settingsGroup';
 import { Button, LevelMeter } from './ui';
 
@@ -13,29 +14,31 @@ export function InputSection({ soundCheck }: SoundCheckProps) {
 
   return (
     <SectionShell muted={isInputStopped}>
-      <SectionHeader
-        accent="input"
-        devices={soundCheck.inputDevices}
-        deviceKind="audioinput"
-        emptyLabel="No microphone detected"
-        icon={MicrophoneIcon}
-        muted={isInputStopped}
-        onDeviceChange={soundCheck.handleInputChange}
-        onRefresh={soundCheck.refreshDevices}
-        onToggleMute={soundCheck.toggleInputMute}
-        selectedDeviceId={soundCheck.selectedInputId}
-        selectedDeviceName={soundCheck.selectedInputName}
-        selectLabel="Microphone device"
-        signalLevel={soundCheck.inputLevel}
-        signalState={soundCheck.inputSignalState}
-        toggleLabel={isInputStopped ? 'Unmute microphone' : 'Mute microphone'}
-      />
-      <LevelMeter
-        accent="input"
-        level={soundCheck.inputLevel}
-        spectrum={soundCheck.inputSpectrum}
-        spectrumPeaks={soundCheck.inputSpectrumPeaks}
-      />
+      <StickyIoChrome>
+        <SectionHeader
+          accent="input"
+          devices={soundCheck.inputDevices}
+          deviceKind="audioinput"
+          emptyLabel="No microphone detected"
+          icon={MicrophoneIcon}
+          muted={isInputStopped}
+          onDeviceChange={soundCheck.handleInputChange}
+          onRefresh={soundCheck.refreshDevices}
+          onToggleMute={soundCheck.toggleInputMute}
+          selectedDeviceId={soundCheck.selectedInputId}
+          selectedDeviceName={soundCheck.selectedInputName}
+          selectLabel="Microphone device"
+          signalLevel={soundCheck.inputLevel}
+          signalState={soundCheck.inputSignalState}
+          toggleLabel={isInputStopped ? 'Unmute microphone' : 'Mute microphone'}
+        />
+        <LevelMeter
+          accent="input"
+          level={soundCheck.inputLevel}
+          spectrum={soundCheck.inputSpectrum}
+          spectrumPeaks={soundCheck.inputSpectrumPeaks}
+        />
+      </StickyIoChrome>
 
       <div className="grid gap-4 p-4 sm:p-5">
         <ProcessingBlock soundCheck={soundCheck} />
@@ -193,28 +196,30 @@ function RecordingCapture({ soundCheck }: SoundCheckProps) {
 
   return (
     <SettingsGroup title="Record input">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        {soundCheck.isRecording ? (
-          <Button variant="danger" onClick={soundCheck.stopRecording}>
-            Stop recording
-          </Button>
-        ) : (
-          <Button
-            disabled={soundCheck.appPaused || soundCheck.inputMuted}
-            onClick={soundCheck.startRecording}
-          >
-            Record input
-          </Button>
-        )}
+      <HelpTip label="Record" placement="top-start">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {soundCheck.isRecording ? (
+            <Button variant="danger" onClick={soundCheck.stopRecording}>
+              Stop recording
+            </Button>
+          ) : (
+            <Button
+              disabled={soundCheck.appPaused || soundCheck.inputMuted}
+              onClick={soundCheck.startRecording}
+            >
+              Record input
+            </Button>
+          )}
 
-        <p className="text-muted font-mono text-xs">
-          {soundCheck.isRecording
-            ? formatSeconds(soundCheck.recordingSeconds)
-            : latestRecordedClip
-              ? formatSeconds(latestRecordedClip.durationSeconds)
-              : '00:00.0'}
-        </p>
-      </div>
+          <p className="text-muted font-mono text-xs">
+            {soundCheck.isRecording
+              ? formatSeconds(soundCheck.recordingSeconds)
+              : latestRecordedClip
+                ? formatSeconds(latestRecordedClip.durationSeconds)
+                : '00:00.0'}
+          </p>
+        </div>
+      </HelpTip>
     </SettingsGroup>
   );
 }

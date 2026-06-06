@@ -12,8 +12,11 @@ import type { SoundCheckController } from '@/utils/useSoundCheck';
 import { getDeviceLabel } from '@/utils/devices';
 import { joinClasses } from '@/utils/utils';
 import { Modal } from './Modal';
+import { siteActionButtonClassName } from './siteActionStyles';
 
 type DebugModalProps = {
+  closeWhen?: boolean;
+  onOpen?: () => void;
   soundCheck: SoundCheckController;
 };
 
@@ -66,7 +69,7 @@ const debugMimeTypes = [
 
 const DEBUG_TEXT_REFRESH_MS = 250;
 
-export function DebugModal({ soundCheck }: DebugModalProps) {
+export function DebugModal({ closeWhen, onOpen, soundCheck }: DebugModalProps) {
   const [includedSections, setIncludedSections] = useState(
     defaultIncludedSections,
   );
@@ -204,7 +207,7 @@ export function DebugModal({ soundCheck }: DebugModalProps) {
       setForceRefreshTick(0);
     }
 
-    setDisplayedDebugText(debugText);
+    setDisplayedDebugText(latestDebugTextRef.current);
 
     const intervalId = window.setInterval(() => {
       setDisplayedDebugText(latestDebugTextRef.current);
@@ -245,12 +248,16 @@ export function DebugModal({ soundCheck }: DebugModalProps) {
 
   return (
     <Modal
+      closeWhen={closeWhen}
       title="Audio debug information"
       modalAriaLabel="Audio debug information"
+      onOpen={onOpen}
       triggerAriaLabel="Open audio debug information"
       triggerClassName="rounded-lg transition active:translate-y-px active:scale-[0.985] focus:outline-none"
       trigger={
-        <span className="border-line bg-panel hover:bg-panel-soft inline-flex h-10 items-center justify-center rounded-lg border px-3 text-sm font-semibold transition select-none">
+        <span
+          className={siteActionButtonClassName({ className: 'select-none' })}
+        >
           Debug
         </span>
       }
@@ -339,7 +346,7 @@ export function DebugModal({ soundCheck }: DebugModalProps) {
             value={shownDebugText}
             onChange={handleDebugTextChange}
             spellCheck={false}
-            className="border-line bg-panel-soft text-foreground focus:border-control focus:ring-control-soft h-[50svh] min-h-80 w-full resize-y overflow-auto rounded-lg border p-4 pr-16 font-mono text-xs leading-5 outline-none focus:ring-4"
+            className="border-line bg-panel-soft text-foreground focus:border-control focus:ring-control-soft h-[42svh] min-h-60 w-full resize-y overflow-auto rounded-lg border p-4 pr-16 font-mono text-xs leading-5 outline-none focus:ring-4 sm:h-[50svh] sm:min-h-80"
           />
         </div>
       </div>
