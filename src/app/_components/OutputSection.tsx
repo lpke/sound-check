@@ -32,10 +32,30 @@ const speakerTestOptions: { kind: SpeakerTestKind; label: string }[] = [
 ];
 const HELP_DEMO_RECORDING_DURATION_SECONDS = 5;
 const HELP_DEMO_MUSIC_DURATION_SECONDS = 96;
-const defaultHelpDemoMusicMarks = [
-  { id: 'help-demo-music-mark-1', seconds: 18 },
-  { id: 'help-demo-music-mark-2', seconds: 47 },
-];
+const HELP_MUSIC_MARK_RATIOS = [0.4, 0.7] as const;
+
+type HelpMusicMark = {
+  id: string;
+  seconds: number;
+};
+
+type VisibleMusicMark = HelpMusicMark & {
+  kind: 'actual' | 'demo' | 'temporary';
+};
+
+function getHelpMusicMarks(durationSeconds: number, idPrefix: string) {
+  return HELP_MUSIC_MARK_RATIOS.map((ratio, index) => ({
+    id: `${idPrefix}-${index}`,
+    seconds: Math.round(durationSeconds * ratio * 10) / 10,
+  }));
+}
+
+function getDefaultHelpDemoMusicMarks() {
+  return getHelpMusicMarks(
+    HELP_DEMO_MUSIC_DURATION_SECONDS,
+    'help-demo-music-mark',
+  );
+}
 
 export function OutputSection({ soundCheck }: SoundCheckProps) {
   const musicFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -95,6 +115,7 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
           <SettingsGroup
             title="Output access"
             description="Ask the browser for additional speaker choices when it supports explicit output selection."
+            helpDescription="Find more speaker choices."
           >
             <Button
               variant="outputSecondary"
@@ -105,7 +126,10 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
           </SettingsGroup>
         ) : null}
 
-        <SettingsGroup title="Speaker test">
+        <SettingsGroup
+          title="Speaker test"
+          helpDescription="Play sound through the speaker."
+        >
           <div className="grid gap-4">
             <Field label="Sound">
               <div className="relative">
@@ -194,51 +218,160 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
 
 function RecordingPlayback({ soundCheck }: SoundCheckProps) {
   const { isHelpModeActive } = useHelpMode();
+  const [enteringClipIds, setEnteringClipIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [exitingClipIds, setExitingClipIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const knownClipIdsRef = useRef<Set<string>>(new Set());
+  const hasInitialClipSnapshotRef = useRef(false);
+  const clipAnimationTimersRef = useRef<Set<number>>(new Set());
+  const deleteClipTimersRef = useRef<Map<string, number>>(new Map());
   const shouldShowHelpDemo =
     isHelpModeActive && soundCheck.recordedClips.length === 0;
+  const clipIdsKey = soundCheck.recordedClips.map((clip) => clip.id).join('|');
+
+  useEffect(() => {
+    const animationTimers = clipAnimationTimersRef.current;
+    const clipIds = new Set(soundCheck.recordedClips.map((clip) => clip.id));
+    const previousClipIds = knownClipIdsRef.current;
+    const newClipIds = [...clipIds].filter(
+      (clipId) => !previousClipIds.has(clipId),
+    );
+
+    knownClipIdsRef.current = clipIds;
+
+    if (!hasInitialClipSnapshotRef.current) {
+      hasInitialClipSnapshotRef.current = true;
+      return undefined;
+    }
+
+    if (newClipIds.length === 0) {
+      return undefined;
+    }
+
+    const enterTimer = window.setTimeout(() => {
+      setEnteringClipIds((currentIds) => {
+        const nextIds = new Set(currentIds);
+
+        newClipIds.forEach((clipId) => nextIds.add(clipId));
+
+        return nextIds;
+      });
+    }, 0);
+    const clearTimer = window.setTimeout(() => {
+      setEnteringClipIds((currentIds) => {
+        const nextIds = new Set(currentIds);
+
+        newClipIds.forEach((clipId) => nextIds.delete(clipId));
+
+        return nextIds;
+      });
+    }, 260);
+
+    animationTimers.add(enterTimer);
+    animationTimers.add(clearTimer);
+
+    return () => {
+      window.clearTimeout(enterTimer);
+      window.clearTimeout(clearTimer);
+      animationTimers.delete(enterTimer);
+      animationTimers.delete(clearTimer);
+    };
+  }, [clipIdsKey, soundCheck.recordedClips]);
+
+  useEffect(() => {
+    const animationTimers = clipAnimationTimersRef.current;
+    const deleteTimers = deleteClipTimersRef.current;
+
+    return () => {
+      animationTimers.forEach((timer) => window.clearTimeout(timer));
+      deleteTimers.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, []);
+
+  function handleDeleteRecordedClip(clipId: string) {
+    if (deleteClipTimersRef.current.has(clipId)) {
+      return;
+    }
+
+    setExitingClipIds((currentIds) => new Set(currentIds).add(clipId));
+
+    const deleteTimer = window.setTimeout(() => {
+      deleteClipTimersRef.current.delete(clipId);
+      soundCheck.deleteRecordedClip(clipId);
+      setExitingClipIds((currentIds) => {
+        const nextIds = new Set(currentIds);
+
+        nextIds.delete(clipId);
+
+        return nextIds;
+      });
+    }, 220);
+
+    deleteClipTimersRef.current.set(clipId, deleteTimer);
+  }
 
   return (
-    <SettingsGroup title="Recorded playback">
-      <HelpTip label="Play clips" placement="top-start">
-        <div className="grid gap-2">
-          {shouldShowHelpDemo ? (
-            <HelpDemoRecordedClip />
-          ) : soundCheck.recordedClips.length === 0 ? (
-            <p className="text-muted text-sm">No recordings yet.</p>
-          ) : (
-            soundCheck.recordedClips.map((clip, index) => {
-              const isActive =
-                soundCheck.recordedPlayback.activeClipId === clip.id;
-              const isPlaying =
-                isActive && soundCheck.recordedPlayback.isPlaying;
-              const positionSeconds =
-                soundCheck.recordedPlayback.positionsByClipId[clip.id] ?? 0;
-              const recordingName = clip.name || 'Recording';
+    <SettingsGroup
+      title="Recorded playback"
+      helpDescription="Try saved mic clips."
+    >
+      <div className="grid gap-2">
+        {shouldShowHelpDemo ? (
+          <HelpDemoRecordedClip />
+        ) : soundCheck.recordedClips.length === 0 ? (
+          <p className="text-muted text-sm">No recordings yet.</p>
+        ) : (
+          soundCheck.recordedClips.map((clip, index) => {
+            const isActive =
+              soundCheck.recordedPlayback.activeClipId === clip.id;
+            const isPlaying = isActive && soundCheck.recordedPlayback.isPlaying;
+            const positionSeconds =
+              soundCheck.recordedPlayback.positionsByClipId[clip.id] ?? 0;
+            const recordingName = clip.name || 'Recording';
 
-              return (
-                <div key={clip.id} className="contents">
+            return (
+              <div
+                key={clip.id}
+                className={joinClasses(
+                  'recorded-clip-item overflow-hidden',
+                  enteringClipIds.has(clip.id) && 'recorded-clip-entering',
+                  exitingClipIds.has(clip.id) &&
+                    'recorded-clip-exiting pointer-events-none',
+                )}
+              >
+                <div className="recorded-clip-inner min-h-0 overflow-hidden">
                   <div className="grid gap-3 py-2">
                     <div className="grid gap-2">
-                      <input
-                        id={`recorded-clip-name-${clip.id}`}
-                        name={`recorded-clip-name-${clip.id}`}
-                        type="text"
-                        value={clip.name}
-                        onChange={(event) =>
-                          soundCheck.renameRecordedClip(
-                            clip.id,
-                            event.target.value,
-                          )
-                        }
-                        onFocus={() => soundCheck.selectRecordedClip(clip.id)}
-                        onPointerDown={() =>
-                          soundCheck.selectRecordedClip(clip.id)
-                        }
-                        placeholder="Recording"
-                        aria-label="Rename recording"
-                        title="Rename recording"
-                        className="text-foreground focus:border-b-output h-7 min-w-0 border-b border-transparent bg-transparent px-0 text-sm leading-tight transition focus:ring-0 focus:outline-none"
-                      />
+                      <HelpTip
+                        className="w-full"
+                        label="Rename recorded clip"
+                        lockedPlacement
+                        placement="top"
+                      >
+                        <input
+                          id={`recorded-clip-name-${clip.id}`}
+                          name={`recorded-clip-name-${clip.id}`}
+                          type="text"
+                          value={clip.name}
+                          onChange={(event) =>
+                            soundCheck.renameRecordedClip(
+                              clip.id,
+                              event.target.value,
+                            )
+                          }
+                          onFocus={() => soundCheck.selectRecordedClip(clip.id)}
+                          onPointerDown={() =>
+                            soundCheck.selectRecordedClip(clip.id)
+                          }
+                          placeholder="Recording"
+                          aria-label="Rename recording"
+                          title="Rename recording"
+                          className="text-foreground focus:border-b-output h-7 w-full min-w-0 border-b border-transparent bg-transparent px-0 text-sm leading-tight transition focus:ring-0 focus:outline-none"
+                        />
+                      </HelpTip>
                       <span
                         className="text-muted block text-xs"
                         title={clip.inputDeviceName}
@@ -274,7 +407,7 @@ function RecordingPlayback({ soundCheck }: SoundCheckProps) {
                       sideControls={
                         <PlaybackIconButton
                           label={`Delete ${recordingName}`}
-                          onClick={() => soundCheck.deleteRecordedClip(clip.id)}
+                          onClick={() => handleDeleteRecordedClip(clip.id)}
                           tone="danger"
                         >
                           <TrashIcon aria-hidden="true" className="h-5 w-5" />
@@ -288,11 +421,11 @@ function RecordingPlayback({ soundCheck }: SoundCheckProps) {
                     <hr className="border-line -mx-1 mt-2 border-t" />
                   ) : null}
                 </div>
-              );
-            })
-          )}
-        </div>
-      </HelpTip>
+              </div>
+            );
+          })
+        )}
+      </div>
     </SettingsGroup>
   );
 }
@@ -328,17 +461,24 @@ function HelpDemoRecordedClip() {
   return (
     <div className="grid gap-3 py-2">
       <div className="grid gap-2">
-        <input
-          id="help-demo-recorded-clip-name"
-          name="help-demo-recorded-clip-name"
-          type="text"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          placeholder="Recording"
-          aria-label="Rename demo recording"
-          title="Rename demo recording"
-          className="text-foreground focus:border-b-output h-7 min-w-0 border-b border-transparent bg-transparent px-0 text-sm leading-tight transition focus:ring-0 focus:outline-none"
-        />
+        <HelpTip
+          className="w-full"
+          label="Rename recorded clip"
+          lockedPlacement
+          placement="top"
+        >
+          <input
+            id="help-demo-recorded-clip-name"
+            name="help-demo-recorded-clip-name"
+            type="text"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Recording"
+            aria-label="Rename demo recording"
+            title="Rename demo recording"
+            className="text-foreground focus:border-b-output h-7 w-full min-w-0 border-b border-transparent bg-transparent px-0 text-sm leading-tight transition focus:ring-0 focus:outline-none"
+          />
+        </HelpTip>
         <span className="text-muted block text-xs">
           Device: Help mode sample
         </span>
@@ -379,25 +519,30 @@ function MusicConfig({
   const { isHelpModeActive } = useHelpMode();
   const { durationSeconds, isLoading, isPlaying, marks, positionSeconds } =
     soundCheck.musicPlayback;
-  const [demoMusicMarks, setDemoMusicMarks] = useState(
-    defaultHelpDemoMusicMarks,
+  const [demoMusicMarks, setDemoMusicMarks] = useState<HelpMusicMark[]>(
+    getDefaultHelpDemoMusicMarks,
   );
+  const [temporaryMusicMarks, setTemporaryMusicMarks] = useState<
+    HelpMusicMark[]
+  >([]);
   const [demoMusicPositionSeconds, setDemoMusicPositionSeconds] = useState(32);
   const hasLoadedMusic = durationSeconds > 0;
   const shouldUseDemoMusic =
-    isHelpModeActive && !hasLoadedMusic && marks.length === 0;
+    isHelpModeActive && !hasLoadedMusic && !isLoading && marks.length === 0;
   const effectiveDurationSeconds = shouldUseDemoMusic
     ? HELP_DEMO_MUSIC_DURATION_SECONDS
     : durationSeconds;
   const effectivePositionSeconds = shouldUseDemoMusic
     ? demoMusicPositionSeconds
     : positionSeconds;
-  const visibleMarks =
+  const visibleMarks: VisibleMusicMark[] =
     marks.length > 0
-      ? marks.map((mark) => ({ ...mark, isDemo: false }))
-      : isHelpModeActive
-        ? demoMusicMarks.map((mark) => ({ ...mark, isDemo: true }))
-        : [];
+      ? marks.map((mark) => ({ ...mark, kind: 'actual' }))
+      : isHelpModeActive && hasLoadedMusic
+        ? temporaryMusicMarks.map((mark) => ({ ...mark, kind: 'temporary' }))
+        : shouldUseDemoMusic
+          ? demoMusicMarks.map((mark) => ({ ...mark, kind: 'demo' }))
+          : [];
   const needsFile =
     soundCheck.speakerTestSettings.musicSource === 'file' &&
     !soundCheck.speakerTestSettings.musicFile;
@@ -406,6 +551,37 @@ function MusicConfig({
     !soundCheck.appPaused &&
     !soundCheck.outputMuted &&
     !needsFile;
+
+  useEffect(() => {
+    const updateTimer = window.setTimeout(() => {
+      if (!isHelpModeActive) {
+        setDemoMusicMarks(getDefaultHelpDemoMusicMarks());
+        setTemporaryMusicMarks([]);
+        setDemoMusicPositionSeconds(32);
+        return;
+      }
+
+      if (!hasLoadedMusic || isLoading || marks.length > 0) {
+        setTemporaryMusicMarks([]);
+        return;
+      }
+
+      setTemporaryMusicMarks(
+        getHelpMusicMarks(
+          durationSeconds,
+          `help-temporary-music-mark-${Math.round(durationSeconds * 10)}`,
+        ),
+      );
+    }, 0);
+
+    return () => window.clearTimeout(updateTimer);
+  }, [
+    durationSeconds,
+    hasLoadedMusic,
+    isHelpModeActive,
+    isLoading,
+    marks.length,
+  ]);
 
   return (
     <div className="grid gap-4">
@@ -449,63 +625,82 @@ function MusicConfig({
         </div>
       ) : null}
 
-      <AudioPlaybackControls
-        buttonLabel={
-          isLoading ? 'Loading music' : isPlaying ? 'Pause music' : 'Play music'
-        }
-        canUseTransport={canUseTransport}
-        centerControls={
-          <HelpTip label="Add mark" placement="top-start">
-            <PlaybackIconButton
-              disabled={!hasLoadedMusic && !isHelpModeActive}
-              label="Mark current position"
-              onClick={() => {
-                if (hasLoadedMusic) {
-                  soundCheck.markMusicPosition();
-                  return;
-                }
-
-                const nextMarkSeconds = Math.min(
-                  HELP_DEMO_MUSIC_DURATION_SECONDS,
-                  demoMusicPositionSeconds,
-                );
-
-                setDemoMusicMarks((currentMarks) => [
-                  ...currentMarks,
-                  {
-                    id: `help-demo-music-mark-${Date.now()}`,
-                    seconds: nextMarkSeconds,
-                  },
-                ]);
-              }}
-              className="mr-1 -ml-2.5 !h-8 !w-8 hover:scale-95"
-              tone="output"
-            >
-              <BookmarkIcon aria-hidden="true" className="h-5 w-5" />
-            </PlaybackIconButton>
-          </HelpTip>
-        }
-        durationSeconds={effectiveDurationSeconds}
-        isLoading={isLoading}
-        isPlaying={isPlaying}
-        markers={visibleMarks.map((mark) => ({
-          id: mark.id,
-          label: `Mark at ${formatSeconds(mark.seconds)}`,
-          seconds: mark.seconds,
-        }))}
-        onSeek={(nextPosition) => {
-          if (shouldUseDemoMusic) {
-            setDemoMusicPositionSeconds(nextPosition);
-            return;
+      <div
+        data-help-target="true"
+        className={joinClasses(
+          'relative rounded-lg transition-[margin] duration-200 ease-out',
+          isHelpModeActive &&
+            'help-target-shell help-highlight-zone z-50 animate-[help-highlight-in_180ms_ease-out_both]',
+          isHelpModeActive && visibleMarks.length > 0 && 'mb-9',
+        )}
+      >
+        <AudioPlaybackControls
+          buttonLabel={
+            isLoading
+              ? 'Loading music'
+              : isPlaying
+                ? 'Pause music'
+                : 'Play music'
           }
+          canUseTransport={canUseTransport}
+          centerControls={
+            <HelpTip
+              className="mr-1 -ml-2.5 inline-flex"
+              label="Add mark"
+              lockedPlacement
+              placement="bottom"
+            >
+              <PlaybackIconButton
+                disabled={isLoading || (!hasLoadedMusic && !shouldUseDemoMusic)}
+                label="Mark current position"
+                onClick={() => {
+                  if (hasLoadedMusic) {
+                    soundCheck.markMusicPosition();
+                    return;
+                  }
 
-          soundCheck.handleMusicSeek(nextPosition);
-        }}
-        onToggle={soundCheck.toggleMusicPlayback}
-        positionSeconds={effectivePositionSeconds}
-        seekLabel="Music playback position"
-        seekName="music-playback-position"
-      />
+                  const nextMarkSeconds = Math.min(
+                    HELP_DEMO_MUSIC_DURATION_SECONDS,
+                    demoMusicPositionSeconds,
+                  );
+
+                  setDemoMusicMarks((currentMarks) => [
+                    ...currentMarks,
+                    {
+                      id: `help-demo-music-mark-${Date.now()}`,
+                      seconds: nextMarkSeconds,
+                    },
+                  ]);
+                }}
+                className="!h-8 !w-8 hover:scale-95"
+                tone="output"
+              >
+                <BookmarkIcon aria-hidden="true" className="h-5 w-5" />
+              </PlaybackIconButton>
+            </HelpTip>
+          }
+          durationSeconds={effectiveDurationSeconds}
+          isLoading={isLoading}
+          isPlaying={isPlaying}
+          markers={visibleMarks.map((mark) => ({
+            id: mark.id,
+            label: `Mark at ${formatSeconds(mark.seconds)}`,
+            seconds: mark.seconds,
+          }))}
+          onSeek={(nextPosition) => {
+            if (shouldUseDemoMusic) {
+              setDemoMusicPositionSeconds(nextPosition);
+              return;
+            }
+
+            soundCheck.handleMusicSeek(nextPosition);
+          }}
+          onToggle={soundCheck.toggleMusicPlayback}
+          positionSeconds={effectivePositionSeconds}
+          seekLabel="Music playback position"
+          seekName="music-playback-position"
+        />
+      </div>
 
       {visibleMarks.length > 0 ? (
         <HelpTip label="Use marks" placement="top-start">
@@ -520,7 +715,7 @@ function MusicConfig({
                   className="hover:bg-output-soft/70 flex h-full items-center px-3 font-mono transition focus:outline-none active:translate-y-px active:scale-[0.985] disabled:opacity-50 disabled:active:translate-y-0 disabled:active:scale-100"
                   title={`Play from ${formatSeconds(mark.seconds)}`}
                   onClick={() => {
-                    if (mark.isDemo) {
+                    if (mark.kind === 'demo') {
                       setDemoMusicPositionSeconds(mark.seconds);
                       return;
                     }
@@ -528,8 +723,9 @@ function MusicConfig({
                     soundCheck.playMusicFromMark(mark.seconds);
                   }}
                   disabled={
-                    !mark.isDemo &&
+                    mark.kind !== 'demo' &&
                     (soundCheck.appPaused ||
+                      isLoading ||
                       soundCheck.outputMuted ||
                       !hasLoadedMusic)
                   }
@@ -542,8 +738,17 @@ function MusicConfig({
                   title={`Delete mark at ${formatSeconds(mark.seconds)}`}
                   className="border-output/20 hover:bg-output/8 text-output/60 hover:text-output flex h-full w-8 items-center justify-center border-l transition focus:outline-none active:translate-y-px active:scale-[0.95]"
                   onClick={() => {
-                    if (mark.isDemo) {
+                    if (mark.kind === 'demo') {
                       setDemoMusicMarks((currentMarks) =>
+                        currentMarks.filter(
+                          (currentMark) => currentMark.id !== mark.id,
+                        ),
+                      );
+                      return;
+                    }
+
+                    if (mark.kind === 'temporary') {
+                      setTemporaryMusicMarks((currentMarks) =>
                         currentMarks.filter(
                           (currentMark) => currentMark.id !== mark.id,
                         ),

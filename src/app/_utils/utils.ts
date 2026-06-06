@@ -13,9 +13,10 @@ export function joinClasses(
 }
 
 export function formatSeconds(seconds: number) {
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = Math.floor(seconds % 60);
-  const tenths = Math.floor((seconds % 1) * 10);
+  const totalTenths = Math.max(0, Math.floor(seconds * 10 + 1e-6));
+  const minutes = Math.floor(totalTenths / 600);
+  const remainingSeconds = Math.floor((totalTenths % 600) / 10);
+  const tenths = totalTenths % 10;
 
   return `${String(minutes).padStart(2, '0')}:${String(
     remainingSeconds,

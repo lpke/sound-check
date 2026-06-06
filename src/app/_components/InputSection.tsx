@@ -51,24 +51,36 @@ export function InputSection({ soundCheck }: SoundCheckProps) {
 
 function ProcessingBlock({ soundCheck }: SoundCheckProps) {
   return (
-    <SettingsGroup>
-      <label className="flex cursor-pointer items-center justify-between gap-4">
-        <span className="text-foreground text-sm font-semibold">
+    <SettingsGroup helpDescription="Adjust browser mic cleanup.">
+      <div className="flex items-center justify-between gap-4">
+        <label
+          htmlFor="processing-enabled"
+          className="text-foreground cursor-pointer text-sm font-semibold"
+        >
           Enable capture processing
-        </span>
-        <input
-          id="processing-enabled"
-          name="processing-enabled"
-          type="checkbox"
-          checked={soundCheck.processingEnabled}
-          onChange={(event) =>
-            soundCheck.handleProcessingEnabledChange(event.target.checked)
-          }
-          className={checkboxClassName('input', 'h-5 w-5 shrink-0')}
-        />
-      </label>
+        </label>
+        <HelpTip
+          className="shrink-0"
+          highlightClassName="rounded-sm"
+          label="Toggle browser audio processing"
+          lockedPlacement
+          placement="bottom-end"
+          showBubble={false}
+        >
+          <input
+            id="processing-enabled"
+            name="processing-enabled"
+            type="checkbox"
+            checked={soundCheck.processingEnabled}
+            onChange={(event) =>
+              soundCheck.handleProcessingEnabledChange(event.target.checked)
+            }
+            className={checkboxClassName('input', 'h-5 w-5 shrink-0')}
+          />
+        </HelpTip>
+      </div>
 
-      <div className="border-line mt-3 grid gap-3 border-t pt-3">
+      <div className="border-line mt-3 grid gap-3 border-t pt-3 transition-[margin] duration-200 ease-out">
         <ProcessingOption
           checked={soundCheck.processingSettings.echoCancellation}
           disabled={!soundCheck.processingEnabled}
@@ -150,7 +162,10 @@ function ProcessingOption({
 
 function LiveMonitorBlock({ soundCheck }: SoundCheckProps) {
   return (
-    <SettingsGroup title="Live monitor">
+    <SettingsGroup
+      title="Live monitor"
+      helpDescription="Hear the mic through speakers."
+    >
       <div className="grid gap-4">
         <RangeWithUnit
           accent="input"
@@ -195,31 +210,41 @@ function RecordingCapture({ soundCheck }: SoundCheckProps) {
   const latestRecordedClip = soundCheck.recordedClips.at(-1);
 
   return (
-    <SettingsGroup title="Record input">
-      <HelpTip label="Record" placement="top-start">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          {soundCheck.isRecording ? (
-            <Button variant="danger" onClick={soundCheck.stopRecording}>
-              Stop recording
-            </Button>
-          ) : (
-            <Button
-              disabled={soundCheck.appPaused || soundCheck.inputMuted}
-              onClick={soundCheck.startRecording}
-            >
-              Record input
-            </Button>
-          )}
+    <SettingsGroup helpDescription="Capture a mic test clip.">
+      <div className="mb-4">
+        <HelpTip
+          className="inline-block"
+          label="Record a clip"
+          lockedPlacement
+          placement="right"
+        >
+          <h2 className="text-foreground text-sm font-semibold">
+            Record input
+          </h2>
+        </HelpTip>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {soundCheck.isRecording ? (
+          <Button variant="danger" onClick={soundCheck.stopRecording}>
+            Stop recording
+          </Button>
+        ) : (
+          <Button
+            disabled={soundCheck.appPaused || soundCheck.inputMuted}
+            onClick={soundCheck.startRecording}
+          >
+            Record input
+          </Button>
+        )}
 
-          <p className="text-muted font-mono text-xs">
-            {soundCheck.isRecording
-              ? formatSeconds(soundCheck.recordingSeconds)
-              : latestRecordedClip
-                ? formatSeconds(latestRecordedClip.durationSeconds)
-                : '00:00.0'}
-          </p>
-        </div>
-      </HelpTip>
+        <p className="text-muted font-mono text-xs">
+          {soundCheck.isRecording
+            ? formatSeconds(soundCheck.recordingSeconds)
+            : latestRecordedClip
+              ? formatSeconds(latestRecordedClip.durationSeconds)
+              : '00:00.0'}
+        </p>
+      </div>
     </SettingsGroup>
   );
 }

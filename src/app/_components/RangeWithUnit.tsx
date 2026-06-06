@@ -2,7 +2,7 @@ import { useRef, useState, type PointerEvent } from 'react';
 import { clamp, joinClasses } from '@/utils/utils';
 import type { SectionAccent } from './componentTypes';
 import { numberInputClassName } from './controlStyles';
-import { HelpTip } from './HelpMode';
+import { HelpTip, useHelpMode } from './HelpMode';
 import { Field } from './ui';
 
 const LOG_SCALE_POWER = 1.2;
@@ -130,6 +130,7 @@ export function RangeWithUnit({
   const [isNumberEditing, setIsNumberEditing] = useState(false);
   const activeRangePointerIdRef = useRef<number | null>(null);
   const rangeInputRef = useRef<HTMLInputElement | null>(null);
+  const { isHelpModeActive } = useHelpMode();
 
   function commitSliderValue(rawValue: number) {
     onChange(
@@ -226,8 +227,9 @@ export function RangeWithUnit({
       </div>
       <HelpTip
         className="block rounded-b-lg"
-        label={`Drag ${label.toLowerCase()}`}
-        placement="top-start"
+        label="Click or drag to adjust"
+        lockedPlacement
+        placement="bottom-end"
       >
         <div
           className="relative touch-none select-none"
@@ -267,7 +269,12 @@ export function RangeWithUnit({
   );
 
   return (
-    <div className="grid gap-1">
+    <div
+      className={joinClasses(
+        'grid gap-1 transition-[margin] duration-200 ease-out',
+        isHelpModeActive && 'mb-8',
+      )}
+    >
       {showLabel ? (
         <Field label={showValueInLabel ? `${label}: ${value} ${unit}` : label}>
           {rangeField}

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { StatusTone } from '@/utils/types';
 import { clamp, joinClasses } from '@/utils/utils';
-import { HelpTip } from './HelpMode';
+import { HelpTip, useHelpMode } from './HelpMode';
 
 export function Panel({
   children,
@@ -162,9 +162,12 @@ export function LevelMeter({
   const boundedLevel = clamp(level, 0, 1);
   const [peakLevel, setPeakLevel] = useState(0);
   const [isPeakVisible, setIsPeakVisible] = useState(false);
+  const [hasSimpleHelpBubbleSettled, setHasSimpleHelpBubbleSettled] =
+    useState(false);
   const [isSpectrumVisible, setIsSpectrumVisible] = useState(
     getDefaultIsSpectrumVisible,
   );
+  const { isHelpModeActive, isHelpModeExiting } = useHelpMode();
   const latestLevelRef = useRef(boundedLevel);
   const fadeTimerRef = useRef<number | null>(null);
   const dropTimerRef = useRef<number | null>(null);
@@ -230,110 +233,159 @@ export function LevelMeter({
     };
   }, []);
 
-  return (
-    <HelpTip
-      className="block w-full"
-      label="Toggle levels"
-      placement="bottom-start"
-    >
-      <button
-        type="button"
-        aria-label={toggleLabel}
-        aria-pressed={isSpectrumVisible}
-        title={toggleLabel}
-        onClick={() => setIsSpectrumVisible((current) => !current)}
-        className={joinClasses(
-          'bg-panel-strong focus-visible:ring-control-soft relative block w-full overflow-hidden p-0 text-left transition-[height,background-color,box-shadow] duration-300 ease-out focus-visible:ring-2 focus-visible:outline-none',
-          isSpectrumVisible
-            ? 'h-20 shadow-[inset_0_0_0_1px_rgba(23,26,31,0.08),inset_0_12px_28px_rgba(23,26,31,0.08)]'
-            : 'grid h-3 grid-cols-[repeat(48,minmax(0,1fr))]',
-          className,
-        )}
-      >
-        {isSpectrumVisible ? (
-          <>
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-0 opacity-45"
-              style={{
-                backgroundImage:
-                  'linear-gradient(to right, rgba(255,255,255,0.65) 1px, transparent 1px), linear-gradient(to top, rgba(23,26,31,0.16) 1px, transparent 1px)',
-                backgroundSize: '12.5% 100%, 100% 25%',
-              }}
-            />
-            <span
-              aria-hidden="true"
-              className="bg-danger absolute inset-x-0 top-0 z-20 h-px opacity-70"
-            />
-            <span
-              aria-hidden="true"
-              className="absolute inset-x-1 top-2 bottom-1 z-10 flex items-stretch gap-0.5"
-            >
-              {visualizerLevels.map((visualizerLevel, index) => {
-                const peakLevelForBand = clamp(
-                  visualizerPeakLevels[index] ?? 0,
-                  0,
-                  1,
-                );
+  useEffect(() => {
+    if (!isHelpModeActive || isSpectrumVisible || accent !== 'input') {
+      const resetTimer = window.setTimeout(() => {
+        setHasSimpleHelpBubbleSettled(false);
+      }, 0);
 
-                return (
-                  <span key={index} className="relative min-w-0 flex-1">
-                    <span
-                      className={joinClasses(
-                        'absolute inset-x-0 bottom-0 rounded-t-sm transition-[height,opacity,background-color] duration-75',
-                        meterToneClassName(visualizerLevel, accent),
-                      )}
-                      style={{
-                        height: `${visualizerLevel > 0 ? Math.max(5, visualizerLevel * 100) : 2}%`,
-                        opacity: 0.18 + visualizerLevel * 0.82,
-                      }}
-                    />
-                    <span
-                      className="bg-foreground/70 absolute inset-x-0 h-px transition-[bottom,opacity] duration-75"
-                      style={{
-                        bottom: `${peakLevelForBand * 100}%`,
-                        opacity: peakLevelForBand > 0 ? 0.72 : 0,
-                      }}
-                    />
-                  </span>
-                );
-              })}
+      return () => window.clearTimeout(resetTimer);
+    }
+
+    if (isHelpModeExiting) {
+      return undefined;
+    }
+
+    const showBubbleTimer = window.setTimeout(() => {
+      setHasSimpleHelpBubbleSettled(true);
+    }, 340);
+
+    return () => window.clearTimeout(showBubbleTimer);
+  }, [accent, isHelpModeActive, isHelpModeExiting, isSpectrumVisible]);
+  const canShowSimpleHelpBubble =
+    isHelpModeActive &&
+    !isSpectrumVisible &&
+    accent === 'input' &&
+    hasSimpleHelpBubbleSettled;
+
+  const meterButton = (
+    <button
+      type="button"
+      aria-label={toggleLabel}
+      aria-pressed={isSpectrumVisible}
+      title={toggleLabel}
+      onClick={() => setIsSpectrumVisible((current) => !current)}
+      className={joinClasses(
+        'bg-panel-strong focus-visible:ring-control-soft relative block w-full overflow-hidden p-0 text-left transition-[height,background-color,box-shadow] duration-300 ease-out focus-visible:ring-2 focus-visible:outline-none',
+        isSpectrumVisible
+          ? 'h-20 shadow-[inset_0_0_0_1px_rgba(23,26,31,0.08),inset_0_12px_28px_rgba(23,26,31,0.08)]'
+          : 'grid h-3 grid-cols-[repeat(48,minmax(0,1fr))]',
+        className,
+      )}
+    >
+      {isSpectrumVisible ? (
+        <>
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 opacity-45"
+            style={{
+              backgroundImage:
+                'linear-gradient(to right, rgba(255,255,255,0.65) 1px, transparent 1px), linear-gradient(to top, rgba(23,26,31,0.16) 1px, transparent 1px)',
+              backgroundSize: '12.5% 100%, 100% 25%',
+            }}
+          />
+          <span
+            aria-hidden="true"
+            className="bg-danger absolute inset-x-0 top-0 z-20 h-px opacity-70"
+          />
+          <span
+            aria-hidden="true"
+            className="absolute inset-x-1 top-2 bottom-1 z-10 flex items-stretch gap-0.5"
+          >
+            {visualizerLevels.map((visualizerLevel, index) => {
+              const peakLevelForBand = clamp(
+                visualizerPeakLevels[index] ?? 0,
+                0,
+                1,
+              );
+
+              return (
+                <span key={index} className="relative min-w-0 flex-1">
+                  <span
+                    className={joinClasses(
+                      'absolute inset-x-0 bottom-0 rounded-t-sm transition-[height,opacity,background-color] duration-75',
+                      meterToneClassName(visualizerLevel, accent),
+                    )}
+                    style={{
+                      height: `${visualizerLevel > 0 ? Math.max(5, visualizerLevel * 100) : 2}%`,
+                      opacity: 0.18 + visualizerLevel * 0.82,
+                    }}
+                  />
+                  <span
+                    className="bg-foreground/70 absolute inset-x-0 h-px transition-[bottom,opacity] duration-75"
+                    style={{
+                      bottom: `${peakLevelForBand * 100}%`,
+                      opacity: peakLevelForBand > 0 ? 0.72 : 0,
+                    }}
+                  />
+                </span>
+              );
+            })}
+          </span>
+          <span
+            aria-hidden="true"
+            className={joinClasses(
+              'pointer-events-none absolute inset-x-0 bottom-0 z-30 h-10 bg-gradient-to-t to-transparent',
+              accent === 'output'
+                ? 'from-output-soft/45'
+                : 'from-input-soft/45',
+            )}
+          />
+          {isHelpModeActive && accent === 'input' ? (
+            <span className="pointer-events-none absolute bottom-2 left-1/2 z-40 -translate-x-1/2">
+              <span
+                className={joinClasses(
+                  'help-tip-bubble block rounded-lg border px-2.5 py-1.5 text-xs leading-4 font-semibold whitespace-nowrap shadow-[0_18px_42px_rgba(15,23,42,0.28)]',
+                  isHelpModeExiting &&
+                    'animate-[help-tip-fade-out_160ms_ease-in_both]',
+                )}
+              >
+                Toggle visualiser style
+              </span>
             </span>
+          ) : null}
+        </>
+      ) : (
+        segments.map((segment) => {
+          const isActive = segment < activeSegments;
+          const isPeak = peakLevel > 0 && segment === peakSegment;
+          const ratio = (segment + 1) / segments.length;
+
+          return (
             <span
-              aria-hidden="true"
+              key={segment}
               className={joinClasses(
-                'pointer-events-none absolute inset-x-0 bottom-0 z-30 h-10 bg-gradient-to-t to-transparent',
-                accent === 'output'
-                  ? 'from-output-soft/45'
-                  : 'from-input-soft/45',
+                'relative h-full min-w-0',
+                isActive && meterToneClassName(ratio, accent),
+                isActive &&
+                  segment < activeSegments - 1 &&
+                  'after:absolute after:top-0 after:right-0 after:h-full after:w-px after:bg-white/35',
+                isPeak &&
+                  'before:bg-foreground/70 before:absolute before:top-0 before:right-0 before:z-10 before:h-full before:w-0.5 before:transition-opacity before:duration-300',
+                isPeak &&
+                  (isPeakVisible ? 'before:opacity-100' : 'before:opacity-0'),
               )}
             />
-          </>
-        ) : (
-          segments.map((segment) => {
-            const isActive = segment < activeSegments;
-            const isPeak = peakLevel > 0 && segment === peakSegment;
-            const ratio = (segment + 1) / segments.length;
+          );
+        })
+      )}
+    </button>
+  );
 
-            return (
-              <span
-                key={segment}
-                className={joinClasses(
-                  'relative h-full min-w-0',
-                  isActive && meterToneClassName(ratio, accent),
-                  isActive &&
-                    segment < activeSegments - 1 &&
-                    'after:absolute after:top-0 after:right-0 after:h-full after:w-px after:bg-white/35',
-                  isPeak &&
-                    'before:bg-foreground/70 before:absolute before:top-0 before:right-0 before:z-10 before:h-full before:w-0.5 before:transition-opacity before:duration-300',
-                  isPeak &&
-                    (isPeakVisible ? 'before:opacity-100' : 'before:opacity-0'),
-                )}
-              />
-            );
-          })
-        )}
-      </button>
+  const levelMeterWrapperClassName = joinClasses(
+    'block w-full transition-[margin] duration-200 ease-out',
+    isHelpModeActive && !isSpectrumVisible && accent === 'input' && 'mb-12',
+  );
+
+  return (
+    <HelpTip
+      className={levelMeterWrapperClassName}
+      label="Toggle visualiser style"
+      lockedPlacement
+      placement="bottom"
+      showBubble={canShowSimpleHelpBubble}
+    >
+      {meterButton}
     </HelpTip>
   );
 }

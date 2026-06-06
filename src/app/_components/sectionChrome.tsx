@@ -26,6 +26,7 @@ export function SectionShell({
 
   return (
     <section
+      data-help-boundary="true"
       className={joinClasses(
         'border-line bg-panel relative rounded-none border-y shadow-[0_18px_48px_rgba(15,23,42,0.08)] sm:rounded-lg sm:border',
         isHelpModeActive ? 'overflow-visible' : 'overflow-hidden',
@@ -124,7 +125,10 @@ export function StickyIoChrome({ children }: { children: ReactNode }) {
   }, [isHelpModeActive, stickyState.height]);
 
   return (
-    <div ref={containerRef}>
+    <div
+      ref={containerRef}
+      className="transition-[margin] duration-200 ease-out"
+    >
       {stickyState.isSticky ? (
         <div aria-hidden="true" style={{ height: stickyState.height }} />
       ) : null}
@@ -187,15 +191,17 @@ export function SectionHeader({
   signalState: SectionSignalState;
   toggleLabel: string;
 }) {
+  const { isHelpModeActive } = useHelpMode();
   const canChangeDevice = !disabled && devices.length > 0;
   const visibleDeviceName = selectedDeviceName || emptyLabel;
 
   return (
     <div
       className={joinClasses(
-        'border-line grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-4 border-b px-4 py-4 sm:px-5',
+        'border-line grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-4 border-b px-4 py-4 transition-[margin] duration-200 ease-out sm:px-5',
         accent === 'input' && 'bg-input-soft',
         accent === 'output' && 'bg-output-soft',
+        isHelpModeActive && accent === 'input' && 'mb-10',
       )}
     >
       <HelpTip
@@ -203,7 +209,9 @@ export function SectionHeader({
         className="h-11 w-11 shrink-0"
         highlightClassName="rounded-full"
         label={accent === 'input' ? 'Mute input' : 'Mute output'}
-        placement="bottom-start"
+        lockedPlacement
+        placement="bottom"
+        showBubble={accent === 'input'}
       >
         <button
           type="button"
@@ -222,52 +230,68 @@ export function SectionHeader({
           <Icon aria-hidden="true" className="h-5 w-5" />
         </button>
       </HelpTip>
+      <HelpTip
+        bubbleClassName="w-[7.75rem] whitespace-normal"
+        label="Click for more devices"
+        lockedPlacement
+        placement="bottom"
+        showBubble={accent === 'input'}
+        className="max-w-full min-w-44 justify-self-start"
+      >
+        <label className="relative inline-flex items-center justify-self-start py-1 pr-10 text-left">
+          <span className="sr-only">{selectLabel}</span>
+          <span
+            data-help-anchor="true"
+            className="text-foreground min-w-0 truncate text-lg leading-tight font-semibold sm:text-xl"
+            title={visibleDeviceName}
+          >
+            {visibleDeviceName}
+          </span>
+          {canChangeDevice ? (
+            <ChevronDownIcon
+              aria-hidden="true"
+              className="text-muted pointer-events-none mr-2 ml-1.5 h-4 w-4 shrink-0"
+            />
+          ) : null}
+          <select
+            id={`${deviceKind}-device`}
+            name={`${deviceKind}-device`}
+            aria-label={selectLabel}
+            disabled={!canChangeDevice}
+            title={visibleDeviceName}
+            value={selectedDeviceId}
+            onChange={onDeviceChange}
+            className="absolute inset-0 h-full w-full cursor-pointer appearance-none opacity-0 outline-none disabled:cursor-not-allowed"
+          >
+            {devices.length === 0 ? (
+              <option value="">{emptyLabel}</option>
+            ) : (
+              devices.map((device, index) => (
+                <option
+                  key={`${device.deviceId}-${index}`}
+                  value={device.deviceId}
+                >
+                  {getDeviceLabel(device, devices, deviceKind)}
+                </option>
+              ))
+            )}
+          </select>
+        </label>
+      </HelpTip>
 
-      <label className="relative inline-flex max-w-full min-w-44 items-center justify-self-start py-1 pr-10 text-left">
-        <span className="sr-only">{selectLabel}</span>
-        <span
-          className="text-foreground min-w-0 truncate text-lg leading-tight font-semibold sm:text-xl"
-          title={visibleDeviceName}
-        >
-          {visibleDeviceName}
-        </span>
-        {canChangeDevice ? (
-          <ChevronDownIcon
-            aria-hidden="true"
-            className="text-muted pointer-events-none mr-2 ml-1.5 h-4 w-4 shrink-0"
-          />
-        ) : null}
-        <select
-          id={`${deviceKind}-device`}
-          name={`${deviceKind}-device`}
-          aria-label={selectLabel}
-          disabled={!canChangeDevice}
-          title={visibleDeviceName}
-          value={selectedDeviceId}
-          onChange={onDeviceChange}
-          className="absolute inset-0 h-full w-full cursor-pointer appearance-none opacity-0 outline-none disabled:cursor-not-allowed"
-        >
-          {devices.length === 0 ? (
-            <option value="">{emptyLabel}</option>
-          ) : (
-            devices.map((device, index) => (
-              <option
-                key={`${device.deviceId}-${index}`}
-                value={device.deviceId}
-              >
-                {getDeviceLabel(device, devices, deviceKind)}
-              </option>
-            ))
-          )}
-        </select>
-      </label>
-
-      <RefreshButton
-        accent={accent}
-        label="Refresh devices"
-        onClick={onRefresh}
-        icon={RefreshIcon}
-      />
+      <HelpTip
+        label="Refresh device list"
+        lockedPlacement
+        placement="bottom"
+        showBubble={accent === 'input'}
+      >
+        <RefreshButton
+          accent={accent}
+          label="Refresh devices"
+          onClick={onRefresh}
+          icon={RefreshIcon}
+        />
+      </HelpTip>
       <SignalDot level={signalLevel} state={signalState} />
     </div>
   );
