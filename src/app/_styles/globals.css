@@ -82,6 +82,8 @@ button:not(:disabled):not([tabindex='-1']),
   .mobile-safe-area-sticky-top {
     top: 0;
     top: env(safe-area-inset-top, 0px);
+    transform: translateZ(0);
+    will-change: transform;
   }
 }
 
@@ -120,6 +122,23 @@ button:not(:disabled):not([tabindex='-1']),
   border-color: var(--color-help-warning);
   background-color: var(--color-help-warning-soft);
   color: var(--color-help-warning-text);
+}
+
+[data-help-boundary='true'] .help-target-shell::after {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  border-radius: inherit;
+  background: rgba(226, 232, 240, 0.35);
+  backdrop-filter: grayscale(1);
+  content: '';
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease-out;
+}
+
+[data-io-section-muted='true'] .help-target-shell::after {
+  opacity: 1;
 }
 
 [data-help-flow='top'],

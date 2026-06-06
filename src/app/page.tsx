@@ -23,7 +23,7 @@ function HomePageContent() {
   const { isHelpModeActive } = useHelpMode();
 
   return (
-    <main className="bg-background text-foreground min-h-screen">
+    <main className="bg-background text-foreground min-h-[100svh]">
       <audio ref={audioRef} className="hidden" playsInline />
       <audio ref={recordedPlaybackAudioRef} className="hidden" playsInline />
       <audio ref={monitorAudioRef} className="hidden" playsInline />

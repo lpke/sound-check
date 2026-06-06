@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { StatusTone } from '@/utils/types';
 import { clamp, joinClasses } from '@/utils/utils';
 import { HelpLabel, HelpTarget, useHelpMode } from './HelpMode';
 
@@ -78,68 +77,6 @@ export function Button({
     >
       {children}
     </button>
-  );
-}
-
-export function Toggle({
-  checked,
-  description,
-  disabled,
-  id,
-  label,
-  name,
-  onChange,
-}: {
-  checked: boolean;
-  description: string;
-  disabled?: boolean;
-  id: string;
-  label: string;
-  name?: string;
-  onChange: (checked: boolean) => void;
-}) {
-  return (
-    <label className="border-line bg-panel-soft flex cursor-pointer items-center justify-between gap-4 rounded-lg border p-4">
-      <span>
-        <span className="text-foreground block text-sm font-semibold">
-          {label}
-        </span>
-        <span className="text-muted mt-1 block text-xs leading-5">
-          {description}
-        </span>
-      </span>
-      <input
-        id={id}
-        name={name ?? id}
-        type="checkbox"
-        checked={checked}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.checked)}
-        className="accent-control h-5 w-5 shrink-0"
-      />
-    </label>
-  );
-}
-
-export function StatusPill({
-  children,
-  tone,
-}: {
-  children: ReactNode;
-  tone: StatusTone;
-}) {
-  return (
-    <span
-      className={joinClasses(
-        'inline-flex h-8 items-center rounded-full border px-3 text-xs font-semibold',
-        tone === 'good' && 'border-signal/30 bg-signal-soft text-signal',
-        tone === 'warn' && 'border-warning/30 bg-warning-soft text-warning',
-        tone === 'danger' && 'border-danger/30 bg-danger-soft text-danger',
-        tone === 'idle' && 'border-line bg-panel-soft text-muted',
-      )}
-    >
-      {children}
-    </span>
   );
 }
 

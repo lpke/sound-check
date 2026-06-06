@@ -1,10 +1,4 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type ChangeEvent,
-  type ReactNode,
-} from 'react';
+import { useState, type ChangeEvent, type ReactNode } from 'react';
 import { getDeviceLabel } from '@/utils/devices';
 import type { AudioDevice, SectionSignalState } from '@/utils/types';
 import { clamp, joinClasses } from '@/utils/utils';
@@ -28,6 +22,7 @@ export function SectionShell({
 
   return (
     <section
+      data-io-section-muted={muted ? 'true' : undefined}
       data-help-boundary="true"
       className={joinClasses(
         'border-line bg-panel relative overflow-visible rounded-none border-y shadow-[0_18px_48px_rgba(15,23,42,0.08)] sm:rounded-lg sm:border',
@@ -35,9 +30,13 @@ export function SectionShell({
       )}
     >
       {children}
-      {muted ? (
-        <div className="pointer-events-none absolute inset-0 z-20 bg-slate-200/35 backdrop-grayscale" />
-      ) : null}
+      <div
+        aria-hidden="true"
+        className={joinClasses(
+          'pointer-events-none absolute inset-0 z-[45] bg-slate-200/35 backdrop-grayscale transition-opacity duration-200 ease-out',
+          muted ? 'opacity-100' : 'opacity-0',
+        )}
+      />
     </section>
   );
 }
@@ -45,85 +44,9 @@ export function SectionShell({
 export function StickyIoChrome({ children }: { children: ReactNode }) {
   const { isHelpModeActive } = useHelpMode();
   const isSticky = !isHelpModeActive;
-  const [isStuck, setIsStuck] = useState(false);
-  const [isMobileSticky, setIsMobileSticky] = useState(false);
-  const stickyRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const mobileStickyQuery = window.matchMedia('(max-width: 639px)');
-
-    const updateMobileSticky = () => {
-      setIsMobileSticky(mobileStickyQuery.matches);
-    };
-
-    updateMobileSticky();
-    mobileStickyQuery.addEventListener('change', updateMobileSticky);
-
-    return () => {
-      mobileStickyQuery.removeEventListener('change', updateMobileSticky);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!isSticky || !isMobileSticky) {
-      return;
-    }
-
-    let frameId: number | null = null;
-
-    const updateStickyState = () => {
-      const element = stickyRef.current;
-
-      if (!element) {
-        frameId = null;
-        return;
-      }
-
-      const rect = element.getBoundingClientRect();
-      const top = Number.parseFloat(getComputedStyle(element).top) || 0;
-      const shouldBeStuck = rect.top <= top;
-
-      setIsStuck((current) =>
-        current === shouldBeStuck ? current : shouldBeStuck,
-      );
-      frameId = null;
-    };
-
-    const scheduleUpdate = () => {
-      if (frameId !== null) {
-        return;
-      }
-
-      frameId = window.requestAnimationFrame(updateStickyState);
-    };
-
-    scheduleUpdate();
-    window.addEventListener('scroll', scheduleUpdate, { passive: true });
-    window.addEventListener('resize', scheduleUpdate);
-
-    return () => {
-      if (frameId !== null) {
-        window.cancelAnimationFrame(frameId);
-      }
-
-      window.removeEventListener('scroll', scheduleUpdate);
-      window.removeEventListener('resize', scheduleUpdate);
-    };
-  }, [isSticky, isMobileSticky]);
 
   return (
     <div
-      ref={stickyRef}
-      style={
-        isSticky && isMobileSticky
-          ? {
-              boxShadow: isStuck
-                ? '0 14px 30px rgba(15, 23, 42, 0.15)'
-                : '0 0 0 rgba(15, 23, 42, 0)',
-              transition: 'margin 200ms ease-out, box-shadow 200ms ease-out',
-            }
-          : undefined
-      }
       className={joinClasses(
         'transition-[margin] duration-200 ease-out',
         isSticky &&
