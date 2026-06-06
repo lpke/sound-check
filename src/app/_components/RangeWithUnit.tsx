@@ -56,6 +56,32 @@ function antiLogScaleValue(
   return clamp(quantized, min, max);
 }
 
+function getDecimalPlaces(value: number) {
+  const textValue = value.toString();
+
+  if (textValue.includes('e-')) {
+    return Number(textValue.split('e-')[1] ?? 0);
+  }
+
+  return textValue.split('.')[1]?.length ?? 0;
+}
+
+function snapValueToStep(
+  value: number,
+  min: number,
+  max: number,
+  step: number,
+) {
+  if (step <= 0) {
+    return clamp(value, min, max);
+  }
+
+  const snappedValue = min + Math.round((value - min) / step) * step;
+  const decimalPlaces = Math.max(getDecimalPlaces(min), getDecimalPlaces(step));
+
+  return clamp(Number(snappedValue.toFixed(decimalPlaces)), min, max);
+}
+
 export function RangeWithUnit({
   accent,
   ariaLabel,
@@ -125,11 +151,15 @@ export function RangeWithUnit({
         ? 0
         : clamp((event.clientX - bounds.left) / bounds.width, 0, 1);
 
-    commitSliderValue(sliderMin + ratio * (sliderMax - sliderMin));
+    const nextValue = sliderMin + ratio * (sliderMax - sliderMin);
+
+    commitSliderValue(
+      isLogScale ? nextValue : snapValueToStep(nextValue, min, max, step),
+    );
   }
 
   function handleRangePointerDown(event: PointerEvent<HTMLDivElement>) {
-    if (event.pointerType === 'mouse') {
+    if (event.pointerType !== 'touch') {
       return;
     }
 
@@ -154,7 +184,10 @@ export function RangeWithUnit({
     }
 
     activeRangePointerIdRef.current = null;
-    event.currentTarget.releasePointerCapture(event.pointerId);
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
   }
 
   const rangeField = (
@@ -190,7 +223,13 @@ export function RangeWithUnit({
           {unit}
         </span>
       </div>
-      <div className="relative">
+      <div
+        className="relative touch-none select-none"
+        onPointerCancel={handleRangePointerEnd}
+        onPointerDownCapture={handleRangePointerDown}
+        onPointerMove={handleRangePointerMove}
+        onPointerUp={handleRangePointerEnd}
+      >
         <span
           aria-hidden="true"
           className="absolute right-0 bottom-0 left-0 h-3 rounded-b-[calc(var(--radius-lg)-1px)]"
@@ -214,11 +253,7 @@ export function RangeWithUnit({
         />
         <div
           aria-hidden="true"
-          className="absolute inset-x-0 -top-2 -bottom-2 touch-none sm:hidden"
-          onPointerCancel={handleRangePointerEnd}
-          onPointerDown={handleRangePointerDown}
-          onPointerMove={handleRangePointerMove}
-          onPointerUp={handleRangePointerEnd}
+          className="pointer-events-none absolute inset-x-0 -top-2 -bottom-2 z-20 select-none [@media(pointer:coarse)]:pointer-events-auto"
         />
       </div>
     </div>
