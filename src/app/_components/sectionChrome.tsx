@@ -1,4 +1,10 @@
-import { useState, type ChangeEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ReactNode,
+} from 'react';
 import { getDeviceLabel } from '@/utils/devices';
 import type { AudioDevice, SectionSignalState } from '@/utils/types';
 import { clamp, joinClasses } from '@/utils/utils';
@@ -38,13 +44,74 @@ export function SectionShell({
 
 export function StickyIoChrome({ children }: { children: ReactNode }) {
   const { isHelpModeActive } = useHelpMode();
+  const isSticky = !isHelpModeActive;
+  const [isStuck, setIsStuck] = useState(false);
+  const stickyRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isSticky) {
+      return;
+    }
+
+    let frameId: number | null = null;
+
+    const updateStickyState = () => {
+      const element = stickyRef.current;
+
+      if (!element) {
+        frameId = null;
+        return;
+      }
+
+      const rect = element.getBoundingClientRect();
+      const top = Number.parseFloat(getComputedStyle(element).top) || 0;
+      const shouldBeStuck = rect.top <= top;
+
+      setIsStuck((current) =>
+        current === shouldBeStuck ? current : shouldBeStuck,
+      );
+      frameId = null;
+    };
+
+    const scheduleUpdate = () => {
+      if (frameId !== null) {
+        return;
+      }
+
+      frameId = window.requestAnimationFrame(updateStickyState);
+    };
+
+    scheduleUpdate();
+    window.addEventListener('scroll', scheduleUpdate, { passive: true });
+    window.addEventListener('resize', scheduleUpdate);
+
+    return () => {
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+
+      window.removeEventListener('scroll', scheduleUpdate);
+      window.removeEventListener('resize', scheduleUpdate);
+    };
+  }, [isSticky]);
 
   return (
     <div
+      ref={stickyRef}
+      style={
+        isSticky
+          ? {
+              boxShadow: isStuck
+                ? '0 14px 30px rgba(15, 23, 42, 0.15)'
+                : '0 0 0 rgba(15, 23, 42, 0)',
+              transition: 'margin 200ms ease-out, box-shadow 200ms ease-out',
+            }
+          : undefined
+      }
       className={joinClasses(
         'transition-[margin] duration-200 ease-out',
-        !isHelpModeActive &&
-          'mobile-safe-area-sticky-top sticky z-[35] sm:static sm:z-auto',
+        isSticky &&
+          'mobile-safe-area-sticky-top sticky z-[35] sm:static sm:z-auto sm:shadow-none',
       )}
     >
       <div
@@ -108,17 +175,10 @@ export function SectionHeader({
     >
       <HeaderHelpTarget
         accent={accent}
-        activeClassName="z-[70]"
+        activeClassName="z-[95]"
         className="h-11 w-11 shrink-0"
         highlightClassName="rounded-full"
-        label={
-          <>
-            <span className="sm:hidden">Mute</span>
-            <span className="hidden sm:inline">
-              {accent === 'input' ? 'Mute input' : 'Mute output'}
-            </span>
-          </>
-        }
+        label="Mute"
         placement="bottom-start"
         tipClassName="[--help-tip-gap:0.25rem]"
       >
@@ -141,20 +201,15 @@ export function SectionHeader({
       </HeaderHelpTarget>
       <HeaderHelpTarget
         accent={accent}
-        activeClassName="z-[70]"
+        activeClassName="z-[95]"
         bubbleClassName={joinClasses(
           headerHelpBubbleClassName,
           'whitespace-nowrap',
         )}
         className="max-w-full min-w-0 justify-self-start sm:min-w-44"
-        label={
-          <>
-            <span className="sm:hidden">Devices</span>
-            <span className="hidden sm:inline">Click for more devices</span>
-          </>
-        }
+        label="Devices"
         placement="bottom-start"
-        tipClassName="[--help-tip-gap:0.25rem]"
+        tipClassName="ml-8 [--help-tip-gap:0.25rem]"
       >
         <label className="relative inline-flex max-w-full min-w-0 items-center justify-self-start py-1 pr-10 text-left">
           <span className="sr-only">{selectLabel}</span>
@@ -199,7 +254,7 @@ export function SectionHeader({
 
       <HeaderHelpTarget
         accent={accent}
-        activeClassName="z-[70]"
+        activeClassName="z-[95]"
         bubbleClassName={joinClasses(
           headerHelpBubbleClassName,
           'whitespace-nowrap',
@@ -207,7 +262,7 @@ export function SectionHeader({
         label={
           <>
             <span className="sm:hidden">Refresh</span>
-            <span className="hidden sm:inline">Refresh device list</span>
+            <span className="hidden sm:inline">Refresh devices</span>
           </>
         }
         placement="bottom-end"

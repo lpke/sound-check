@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { StatusTone } from '@/utils/types';
 import { clamp, joinClasses } from '@/utils/utils';
-import { HelpLabel, HelpTarget } from './HelpMode';
+import { HelpLabel, HelpTarget, useHelpMode } from './HelpMode';
 
 export function Panel({
   children,
@@ -144,6 +144,7 @@ export function StatusPill({
 }
 
 const LEVEL_METER_SEGMENT_COUNT = 48;
+const LEVEL_METER_TRANSITION_MS = 300;
 const SIMPLE_LEVEL_METER_HEIGHT_QUERY = '(max-height: 549px)';
 
 export function LevelMeter({
@@ -165,7 +166,10 @@ export function LevelMeter({
   const [isSpectrumVisible, setIsSpectrumVisible] = useState(
     getDefaultIsSpectrumVisible,
   );
+  const [isSpectrumContentVisible, setIsSpectrumContentVisible] =
+    useState(isSpectrumVisible);
   const latestLevelRef = useRef(boundedLevel);
+  const contentSwitchTimerRef = useRef<number | null>(null);
   const fadeTimerRef = useRef<number | null>(null);
   const dropTimerRef = useRef<number | null>(null);
   const segments = Array.from(
@@ -185,6 +189,9 @@ export function LevelMeter({
   const toggleLabel = isSpectrumVisible
     ? 'Show simple level meter'
     : 'Show frequency visualizer';
+  const { isHelpModeActive, isHelpModeExiting } = useHelpMode();
+  const shouldPadVisualizerHelp =
+    accent === 'input' && isHelpModeActive && !isHelpModeExiting;
 
   useEffect(() => {
     latestLevelRef.current = boundedLevel;
@@ -220,6 +227,10 @@ export function LevelMeter({
 
   useEffect(() => {
     return () => {
+      if (contentSwitchTimerRef.current !== null) {
+        window.clearTimeout(contentSwitchTimerRef.current);
+      }
+
       if (fadeTimerRef.current !== null) {
         window.clearTimeout(fadeTimerRef.current);
       }
@@ -230,40 +241,62 @@ export function LevelMeter({
     };
   }, []);
 
+  function handleMeterToggle() {
+    const nextIsSpectrumVisible = !isSpectrumVisible;
+
+    if (contentSwitchTimerRef.current !== null) {
+      window.clearTimeout(contentSwitchTimerRef.current);
+      contentSwitchTimerRef.current = null;
+    }
+
+    setIsSpectrumVisible(nextIsSpectrumVisible);
+
+    if (nextIsSpectrumVisible) {
+      setIsSpectrumContentVisible(true);
+      return;
+    }
+
+    contentSwitchTimerRef.current = window.setTimeout(() => {
+      setIsSpectrumContentVisible(false);
+      contentSwitchTimerRef.current = null;
+    }, LEVEL_METER_TRANSITION_MS);
+  }
+
   const meterButton = (
     <button
       type="button"
       aria-label={toggleLabel}
       aria-pressed={isSpectrumVisible}
       title={toggleLabel}
-      onClick={() => setIsSpectrumVisible((current) => !current)}
+      onClick={handleMeterToggle}
       className={joinClasses(
         'bg-panel-strong focus-visible:ring-control-soft relative block w-full overflow-hidden p-0 text-left transition-[height,background-color,box-shadow] duration-300 ease-out focus-visible:ring-2 focus-visible:outline-none',
         isSpectrumVisible
           ? 'h-20 shadow-[inset_0_0_0_1px_rgba(23,26,31,0.08),inset_0_12px_28px_rgba(23,26,31,0.08)]'
-          : 'grid h-3 grid-cols-[repeat(48,minmax(0,1fr))]',
+          : 'h-3',
+        !isSpectrumContentVisible &&
+          'grid grid-cols-[repeat(48,minmax(0,1fr))]',
         className,
       )}
     >
-      {isSpectrumVisible ? (
-        <>
+      {isSpectrumContentVisible ? (
+        <span
+          aria-hidden="true"
+          className={joinClasses(
+            'pointer-events-none absolute inset-0 transition-opacity duration-300 ease-out',
+            isSpectrumVisible ? 'opacity-100' : 'opacity-0',
+          )}
+        >
           <span
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 opacity-45"
+            className="absolute inset-0 opacity-45"
             style={{
               backgroundImage:
                 'linear-gradient(to right, rgba(255,255,255,0.65) 1px, transparent 1px), linear-gradient(to top, rgba(23,26,31,0.16) 1px, transparent 1px)',
               backgroundSize: '12.5% 100%, 100% 25%',
             }}
           />
-          <span
-            aria-hidden="true"
-            className="bg-danger absolute inset-x-0 top-0 z-20 h-px opacity-70"
-          />
-          <span
-            aria-hidden="true"
-            className="absolute inset-x-1 top-2 bottom-1 z-10 flex items-stretch gap-0.5"
-          >
+          <span className="bg-danger absolute inset-x-0 top-0 z-20 h-px opacity-70" />
+          <span className="absolute inset-x-1 top-2 bottom-1 z-10 flex items-stretch gap-0.5">
             {visualizerLevels.map((visualizerLevel, index) => {
               const peakLevelForBand = clamp(
                 visualizerPeakLevels[index] ?? 0,
@@ -303,7 +336,7 @@ export function LevelMeter({
                 : 'from-input-soft/45',
             )}
           />
-        </>
+        </span>
       ) : (
         segments.map((segment) => {
           const isActive = segment < activeSegments;
@@ -339,21 +372,34 @@ export function LevelMeter({
       className={levelMeterWrapperClassName}
       highlightClassName="rounded-none"
     >
-      {meterButton}
+      <div className="relative">
+        {meterButton}
+        {accent === 'input' ? (
+          <HelpLabel
+            align="center"
+            arrowAlign="center"
+            bubbleClassName="whitespace-nowrap"
+            className="pointer-events-none max-w-[calc(100vw-2rem)]"
+            label="Toggle visualiser style"
+            layout="overlay"
+            placement="bottom"
+            style={{
+              '--help-tip-gap': '0.5rem',
+              '--help-tip-pinned-top': '2.625rem',
+              top: 'min(var(--help-tip-pinned-top), calc(100% + var(--help-tip-gap)))',
+            }}
+          />
+        ) : null}
+      </div>
       {accent === 'input' ? (
-        <HelpLabel
-          align="center"
-          arrowAlign="center"
-          bubbleClassName="whitespace-nowrap"
-          className="pointer-events-none max-w-[calc(100vw-2rem)]"
-          label="Toggle visualiser style"
-          layout="overlay"
-          placement="bottom"
-          style={{
-            '--help-tip-gap': '0.5rem',
-            '--help-tip-pinned-top': '2.625rem',
-            top: 'min(var(--help-tip-pinned-top), calc(100% + var(--help-tip-gap)))',
-          }}
+        <span
+          aria-hidden="true"
+          className={joinClasses(
+            'pointer-events-none block transition-[height] ease-out',
+            shouldPadVisualizerHelp && !isSpectrumVisible
+              ? 'h-8 [transition-delay:0ms] duration-300'
+              : 'h-0 [transition-delay:0ms] duration-300',
+          )}
         />
       ) : null}
     </HelpTarget>

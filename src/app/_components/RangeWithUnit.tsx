@@ -266,9 +266,9 @@ export function RangeWithUnit({
   );
   const rangeLabel = (
     <HelpLabel
-      align="end"
-      arrowAlign="end"
-      className="justify-self-end [--help-tip-gap:0.375rem]"
+      align="start"
+      arrowAlign="start"
+      className="justify-self-start [--help-tip-gap:0.375rem]"
       label="Click or drag to adjust"
       layout="flow"
       placement="bottom"

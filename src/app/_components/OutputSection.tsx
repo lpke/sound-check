@@ -115,7 +115,7 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
           <SettingsGroup
             title="Output access"
             description="Ask the browser for additional speaker choices when it supports explicit output selection."
-            helpDescription="Find more speaker choices."
+            helpDescription="Find more speaker choices"
           >
             <Button
               variant="outputSecondary"
@@ -126,10 +126,7 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
           </SettingsGroup>
         ) : null}
 
-        <SettingsGroup
-          title="Speaker test"
-          helpDescription="Play sound through the speaker."
-        >
+        <SettingsGroup title="Speaker test">
           <div className="grid gap-4">
             <Field label="Sound">
               <div className="relative">
@@ -317,7 +314,7 @@ function RecordingPlayback({ soundCheck }: SoundCheckProps) {
   return (
     <SettingsGroup
       title="Recorded playback"
-      helpDescription="Try saved mic clips."
+      helpDescription="Recorded clips appear here"
     >
       <div className="grid gap-2">
         {shouldShowHelpDemo ? (
@@ -343,6 +340,28 @@ function RecordingPlayback({ soundCheck }: SoundCheckProps) {
             const positionSeconds =
               soundCheck.recordedPlayback.positionsByClipId[clip.id] ?? 0;
             const recordingName = clip.name || 'Recording';
+            const shouldShowRenameHelp = isHelpModeActive && index === 0;
+            const shouldUnderlineRename = isRenameHelpActive && index === 0;
+            const recordingNameInput = (
+              <input
+                id={`recorded-clip-name-${clip.id}`}
+                name={`recorded-clip-name-${clip.id}`}
+                type="text"
+                value={clip.name}
+                onChange={(event) =>
+                  soundCheck.renameRecordedClip(clip.id, event.target.value)
+                }
+                onFocus={() => soundCheck.selectRecordedClip(clip.id)}
+                onPointerDown={() => soundCheck.selectRecordedClip(clip.id)}
+                placeholder="Recording"
+                aria-label="Rename recording"
+                title="Rename recording"
+                className={joinClasses(
+                  'text-foreground focus:border-b-output h-7 w-full min-w-0 border-b border-transparent bg-transparent px-0 text-sm leading-tight transition focus:ring-0 focus:outline-none',
+                  shouldUnderlineRename && 'border-b-output/80',
+                )}
+              />
+            );
 
             return (
               <div
@@ -357,36 +376,18 @@ function RecordingPlayback({ soundCheck }: SoundCheckProps) {
                 <div className="recorded-clip-inner min-h-0 overflow-hidden">
                   <div className="grid gap-3 py-2">
                     <div className="grid gap-2">
-                      <HelpTip
-                        className="w-full"
-                        label="Rename recorded clip"
-                        placement="top"
-                        tipClassName="[--help-tip-gap:0.375rem]"
-                      >
-                        <input
-                          id={`recorded-clip-name-${clip.id}`}
-                          name={`recorded-clip-name-${clip.id}`}
-                          type="text"
-                          value={clip.name}
-                          onChange={(event) =>
-                            soundCheck.renameRecordedClip(
-                              clip.id,
-                              event.target.value,
-                            )
-                          }
-                          onFocus={() => soundCheck.selectRecordedClip(clip.id)}
-                          onPointerDown={() =>
-                            soundCheck.selectRecordedClip(clip.id)
-                          }
-                          placeholder="Recording"
-                          aria-label="Rename recording"
-                          title="Rename recording"
-                          className={joinClasses(
-                            'text-foreground focus:border-b-output h-7 w-full min-w-0 border-b border-transparent bg-transparent px-0 text-sm leading-tight transition focus:ring-0 focus:outline-none',
-                            isRenameHelpActive && 'border-b-output/80',
-                          )}
-                        />
-                      </HelpTip>
+                      {shouldShowRenameHelp ? (
+                        <HelpTip
+                          className="w-full"
+                          label="Clips can be renamed"
+                          placement="top"
+                          tipClassName="[--help-tip-gap:0.375rem]"
+                        >
+                          {recordingNameInput}
+                        </HelpTip>
+                      ) : (
+                        recordingNameInput
+                      )}
                       <span
                         className="text-muted block text-xs"
                         title={clip.inputDeviceName}
@@ -480,9 +481,10 @@ function HelpDemoRecordedClip() {
       <div className="grid gap-2">
         <HelpTip
           className="w-full"
-          label="Rename recorded clip"
+          label="Clips can be renamed"
           placement="top"
           tipClassName="[--help-tip-gap:0.375rem]"
+          bubbleClassName="-mt-2"
         >
           <input
             id="help-demo-recorded-clip-name"
@@ -650,7 +652,7 @@ function MusicConfig({
         activeClassName="z-50"
         className={joinClasses(
           'relative rounded-lg transition-[margin] duration-200 ease-out',
-          isHelpModeOpen && visibleMarks.length > 0 && 'mb-5',
+          isHelpModeOpen && visibleMarks.length > 0 && 'mb-10',
         )}
       >
         <AudioPlaybackControls
@@ -665,8 +667,8 @@ function MusicConfig({
           centerControls={
             <HelpTip
               activeClassName="z-[75]"
-              className="mr-1 -ml-2.5 inline-flex"
-              bubbleClassName="whitespace-nowrap"
+              className="mr-1 -ml-3 inline-flex"
+              bubbleClassName="-ml-6 -mt-1 whitespace-nowrap"
               label="Add mark"
               layout="overlay"
               placement="bottom"
@@ -727,9 +729,10 @@ function MusicConfig({
       {visibleMarks.length > 0 ? (
         <HelpTip
           className="block"
-          label="Use marks"
+          label="Jump to mark"
           placement="bottom-start"
           tipClassName="[--help-tip-gap:0.375rem]"
+          bubbleClassName="mt-1"
         >
           <div className="flex flex-wrap gap-2">
             {visibleMarks.map((mark) => (

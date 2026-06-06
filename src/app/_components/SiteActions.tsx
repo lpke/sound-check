@@ -15,9 +15,9 @@ export function SiteActions({
   return (
     <div
       className={joinClasses(
-        'flex w-full items-center justify-between gap-2 px-4 sm:fixed sm:right-6 sm:bottom-6 sm:z-[75] sm:w-auto sm:justify-end sm:px-0',
+        'flex w-full items-center justify-between gap-2 px-4 sm:fixed sm:right-6 sm:bottom-6 sm:z-[110] sm:w-auto sm:justify-end sm:px-0',
         isHelpModeActive &&
-          'border-line/80 bg-background mobile-safe-area-sticky-top sticky z-[85] py-3 shadow-[0_12px_26px_rgba(15,23,42,0.12)] sm:top-auto sm:border-0 sm:bg-transparent sm:py-0 sm:shadow-none',
+          'border-line/80 bg-background mobile-safe-area-sticky-top sticky z-[110] py-4 shadow-[0_12px_26px_rgba(15,23,42,0.12)] sm:top-auto sm:border-0 sm:bg-transparent sm:py-0 sm:shadow-none',
       )}
     >
       <button
