@@ -46,10 +46,26 @@ export function StickyIoChrome({ children }: { children: ReactNode }) {
   const { isHelpModeActive } = useHelpMode();
   const isSticky = !isHelpModeActive;
   const [isStuck, setIsStuck] = useState(false);
+  const [isMobileSticky, setIsMobileSticky] = useState(false);
   const stickyRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!isSticky) {
+    const mobileStickyQuery = window.matchMedia('(max-width: 639px)');
+
+    const updateMobileSticky = () => {
+      setIsMobileSticky(mobileStickyQuery.matches);
+    };
+
+    updateMobileSticky();
+    mobileStickyQuery.addEventListener('change', updateMobileSticky);
+
+    return () => {
+      mobileStickyQuery.removeEventListener('change', updateMobileSticky);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isSticky || !isMobileSticky) {
       return;
     }
 
@@ -93,13 +109,13 @@ export function StickyIoChrome({ children }: { children: ReactNode }) {
       window.removeEventListener('scroll', scheduleUpdate);
       window.removeEventListener('resize', scheduleUpdate);
     };
-  }, [isSticky]);
+  }, [isSticky, isMobileSticky]);
 
   return (
     <div
       ref={stickyRef}
       style={
-        isSticky
+        isSticky && isMobileSticky
           ? {
               boxShadow: isStuck
                 ? '0 14px 30px rgba(15, 23, 42, 0.15)'
