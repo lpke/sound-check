@@ -2,7 +2,7 @@ import { MAX_MONITOR_DELAY_MS } from '@/utils/types';
 import { formatSeconds } from '@/utils/utils';
 import type { SoundCheckProps } from './componentTypes';
 import { checkboxClassName } from './controlStyles';
-import { HelpTip } from './HelpMode';
+import { HelpTarget, HelpTip } from './HelpMode';
 import { MicrophoneIcon } from './icons';
 import { RangeWithUnit } from './RangeWithUnit';
 import { SectionHeader, SectionShell, StickyIoChrome } from './sectionChrome';
@@ -59,14 +59,7 @@ function ProcessingBlock({ soundCheck }: SoundCheckProps) {
         >
           Enable capture processing
         </label>
-        <HelpTip
-          className="shrink-0"
-          highlightClassName="rounded-sm"
-          label="Toggle browser audio processing"
-          lockedPlacement
-          placement="bottom-end"
-          showBubble={false}
-        >
+        <HelpTarget className="shrink-0" highlightClassName="rounded-sm">
           <input
             id="processing-enabled"
             name="processing-enabled"
@@ -77,7 +70,7 @@ function ProcessingBlock({ soundCheck }: SoundCheckProps) {
             }
             className={checkboxClassName('input', 'h-5 w-5 shrink-0')}
           />
-        </HelpTip>
+        </HelpTarget>
       </div>
 
       <div className="border-line mt-3 grid gap-3 border-t pt-3 transition-[margin] duration-200 ease-out">
@@ -215,7 +208,6 @@ function RecordingCapture({ soundCheck }: SoundCheckProps) {
         <HelpTip
           className="inline-block"
           label="Record a clip"
-          lockedPlacement
           placement="right"
         >
           <h2 className="text-foreground text-sm font-semibold">

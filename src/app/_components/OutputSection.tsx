@@ -10,7 +10,7 @@ import type { SpeakerMusicSource, SpeakerTestKind } from '@/utils/types';
 import { formatSeconds, joinClasses } from '@/utils/utils';
 import type { SoundCheckProps } from './componentTypes';
 import { controlClassName } from './controlStyles';
-import { HelpTip, useHelpMode } from './HelpMode';
+import { HelpTarget, HelpTip, useHelpMode } from './HelpMode';
 import {
   BookmarkIcon,
   ChevronDownIcon,
@@ -217,7 +217,7 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
 }
 
 function RecordingPlayback({ soundCheck }: SoundCheckProps) {
-  const { isHelpModeActive } = useHelpMode();
+  const { isHelpModeActive, isHelpModeExiting } = useHelpMode();
   const [enteringClipIds, setEnteringClipIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -230,6 +230,7 @@ function RecordingPlayback({ soundCheck }: SoundCheckProps) {
   const deleteClipTimersRef = useRef<Map<string, number>>(new Map());
   const shouldShowHelpDemo =
     isHelpModeActive && soundCheck.recordedClips.length === 0;
+  const isRenameHelpActive = isHelpModeActive && !isHelpModeExiting;
   const clipIdsKey = soundCheck.recordedClips.map((clip) => clip.id).join('|');
 
   useEffect(() => {
@@ -320,7 +321,18 @@ function RecordingPlayback({ soundCheck }: SoundCheckProps) {
     >
       <div className="grid gap-2">
         {shouldShowHelpDemo ? (
-          <HelpDemoRecordedClip />
+          <div
+            className={joinClasses(
+              'recorded-clip-item overflow-hidden',
+              isHelpModeExiting
+                ? 'recorded-clip-exiting pointer-events-none'
+                : 'recorded-clip-entering',
+            )}
+          >
+            <div className="recorded-clip-inner min-h-0 overflow-hidden">
+              <HelpDemoRecordedClip />
+            </div>
+          </div>
         ) : soundCheck.recordedClips.length === 0 ? (
           <p className="text-muted text-sm">No recordings yet.</p>
         ) : (
@@ -348,8 +360,8 @@ function RecordingPlayback({ soundCheck }: SoundCheckProps) {
                       <HelpTip
                         className="w-full"
                         label="Rename recorded clip"
-                        lockedPlacement
                         placement="top"
+                        tipClassName="[--help-tip-gap:0.375rem]"
                       >
                         <input
                           id={`recorded-clip-name-${clip.id}`}
@@ -369,7 +381,10 @@ function RecordingPlayback({ soundCheck }: SoundCheckProps) {
                           placeholder="Recording"
                           aria-label="Rename recording"
                           title="Rename recording"
-                          className="text-foreground focus:border-b-output h-7 w-full min-w-0 border-b border-transparent bg-transparent px-0 text-sm leading-tight transition focus:ring-0 focus:outline-none"
+                          className={joinClasses(
+                            'text-foreground focus:border-b-output h-7 w-full min-w-0 border-b border-transparent bg-transparent px-0 text-sm leading-tight transition focus:ring-0 focus:outline-none',
+                            isRenameHelpActive && 'border-b-output/80',
+                          )}
                         />
                       </HelpTip>
                       <span
@@ -431,9 +446,11 @@ function RecordingPlayback({ soundCheck }: SoundCheckProps) {
 }
 
 function HelpDemoRecordedClip() {
+  const { isHelpModeActive, isHelpModeExiting } = useHelpMode();
   const [name, setName] = useState('Help demo recording');
   const [positionSeconds, setPositionSeconds] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const isRenameHelpActive = isHelpModeActive && !isHelpModeExiting;
 
   useEffect(() => {
     if (!isPlaying) {
@@ -464,8 +481,8 @@ function HelpDemoRecordedClip() {
         <HelpTip
           className="w-full"
           label="Rename recorded clip"
-          lockedPlacement
           placement="top"
+          tipClassName="[--help-tip-gap:0.375rem]"
         >
           <input
             id="help-demo-recorded-clip-name"
@@ -476,7 +493,10 @@ function HelpDemoRecordedClip() {
             placeholder="Recording"
             aria-label="Rename demo recording"
             title="Rename demo recording"
-            className="text-foreground focus:border-b-output h-7 w-full min-w-0 border-b border-transparent bg-transparent px-0 text-sm leading-tight transition focus:ring-0 focus:outline-none"
+            className={joinClasses(
+              'text-foreground focus:border-b-output h-7 w-full min-w-0 border-b border-transparent bg-transparent px-0 text-sm leading-tight transition focus:ring-0 focus:outline-none',
+              isRenameHelpActive && 'border-b-output/80',
+            )}
           />
         </HelpTip>
         <span className="text-muted block text-xs">
@@ -516,7 +536,7 @@ function MusicConfig({
   musicFileInputRef: RefObject<HTMLInputElement | null>;
   onMusicSourceChange: (event: ChangeEvent<HTMLSelectElement>) => void;
 }) {
-  const { isHelpModeActive } = useHelpMode();
+  const { isHelpModeActive, isHelpModeExiting } = useHelpMode();
   const { durationSeconds, isLoading, isPlaying, marks, positionSeconds } =
     soundCheck.musicPlayback;
   const [demoMusicMarks, setDemoMusicMarks] = useState<HelpMusicMark[]>(
@@ -551,6 +571,7 @@ function MusicConfig({
     !soundCheck.appPaused &&
     !soundCheck.outputMuted &&
     !needsFile;
+  const isHelpModeOpen = isHelpModeActive && !isHelpModeExiting;
 
   useEffect(() => {
     const updateTimer = window.setTimeout(() => {
@@ -625,13 +646,11 @@ function MusicConfig({
         </div>
       ) : null}
 
-      <div
-        data-help-target="true"
+      <HelpTarget
+        activeClassName="z-50"
         className={joinClasses(
           'relative rounded-lg transition-[margin] duration-200 ease-out',
-          isHelpModeActive &&
-            'help-target-shell help-highlight-zone z-50 animate-[help-highlight-in_180ms_ease-out_both]',
-          isHelpModeActive && visibleMarks.length > 0 && 'mb-9',
+          isHelpModeOpen && visibleMarks.length > 0 && 'mb-5',
         )}
       >
         <AudioPlaybackControls
@@ -645,10 +664,13 @@ function MusicConfig({
           canUseTransport={canUseTransport}
           centerControls={
             <HelpTip
+              activeClassName="z-[75]"
               className="mr-1 -ml-2.5 inline-flex"
+              bubbleClassName="whitespace-nowrap"
               label="Add mark"
-              lockedPlacement
+              layout="overlay"
               placement="bottom"
+              tipClassName="[--help-tip-gap:0.25rem]"
             >
               <PlaybackIconButton
                 disabled={isLoading || (!hasLoadedMusic && !shouldUseDemoMusic)}
@@ -700,18 +722,14 @@ function MusicConfig({
           seekLabel="Music playback position"
           seekName="music-playback-position"
         />
-      </div>
+      </HelpTarget>
 
       {visibleMarks.length > 0 ? (
         <HelpTip
-          className={joinClasses(
-            'block',
-            isHelpModeActive &&
-              'mb-10 transition-[margin] duration-200 ease-out',
-          )}
+          className="block"
           label="Use marks"
-          lockedPlacement
           placement="bottom-start"
+          tipClassName="[--help-tip-gap:0.375rem]"
         >
           <div className="flex flex-wrap gap-2">
             {visibleMarks.map((mark) => (

@@ -3,7 +3,12 @@ import { getDeviceLabel } from '@/utils/devices';
 import type { AudioDevice, SectionSignalState } from '@/utils/types';
 import { clamp, joinClasses } from '@/utils/utils';
 import type { IconComponent, SectionAccent } from './componentTypes';
-import { HelpTip, useHelpMode } from './HelpMode';
+import {
+  HelpTarget,
+  HelpTip,
+  useHelpMode,
+  type HelpTipPlacement,
+} from './HelpMode';
 import { ChevronDownIcon, RefreshIcon } from './icons';
 
 export function SectionShell({
@@ -42,7 +47,13 @@ export function StickyIoChrome({ children }: { children: ReactNode }) {
           'mobile-safe-area-sticky-top sticky z-[35] sm:static sm:z-auto',
       )}
     >
-      <div className="overflow-hidden">{children}</div>
+      <div
+        className={joinClasses(
+          isHelpModeActive ? 'overflow-visible' : 'overflow-hidden',
+        )}
+      >
+        {children}
+      </div>
     </div>
   );
 }
@@ -82,8 +93,9 @@ export function SectionHeader({
   signalState: SectionSignalState;
   toggleLabel: string;
 }) {
-  const { isHelpModeActive } = useHelpMode();
   const canChangeDevice = !disabled && devices.length > 0;
+  const headerHelpBubbleClassName =
+    'px-2 py-1 text-[11px] sm:px-2.5 sm:py-1.5 sm:text-xs';
   const visibleDeviceName = selectedDeviceName || emptyLabel;
 
   return (
@@ -92,17 +104,23 @@ export function SectionHeader({
         'border-line grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-4 border-b px-4 py-4 transition-[margin] duration-200 ease-out sm:px-5',
         accent === 'input' && 'bg-input-soft',
         accent === 'output' && 'bg-output-soft',
-        isHelpModeActive && accent === 'input' && 'mb-10',
       )}
     >
-      <HelpTip
+      <HeaderHelpTarget
+        accent={accent}
         activeClassName="z-[70]"
         className="h-11 w-11 shrink-0"
         highlightClassName="rounded-full"
-        label={accent === 'input' ? 'Mute input' : 'Mute output'}
-        lockedPlacement
-        placement="bottom"
-        showBubble={accent === 'input'}
+        label={
+          <>
+            <span className="sm:hidden">Mute</span>
+            <span className="hidden sm:inline">
+              {accent === 'input' ? 'Mute input' : 'Mute output'}
+            </span>
+          </>
+        }
+        placement="bottom-start"
+        tipClassName="[--help-tip-gap:0.25rem]"
       >
         <button
           type="button"
@@ -120,16 +138,25 @@ export function SectionHeader({
         >
           <Icon aria-hidden="true" className="h-5 w-5" />
         </button>
-      </HelpTip>
-      <HelpTip
+      </HeaderHelpTarget>
+      <HeaderHelpTarget
+        accent={accent}
         activeClassName="z-[70]"
-        bubbleClassName="whitespace-nowrap"
-        label="Click for more devices"
+        bubbleClassName={joinClasses(
+          headerHelpBubbleClassName,
+          'whitespace-nowrap',
+        )}
+        className="max-w-full min-w-0 justify-self-start sm:min-w-44"
+        label={
+          <>
+            <span className="sm:hidden">Devices</span>
+            <span className="hidden sm:inline">Click for more devices</span>
+          </>
+        }
         placement="bottom-start"
-        showBubble={accent === 'input'}
-        className="max-w-full min-w-44 justify-self-start"
+        tipClassName="[--help-tip-gap:0.25rem]"
       >
-        <label className="relative inline-flex items-center justify-self-start py-1 pr-10 text-left">
+        <label className="relative inline-flex max-w-full min-w-0 items-center justify-self-start py-1 pr-10 text-left">
           <span className="sr-only">{selectLabel}</span>
           <span
             data-help-anchor="true"
@@ -168,13 +195,23 @@ export function SectionHeader({
             )}
           </select>
         </label>
-      </HelpTip>
+      </HeaderHelpTarget>
 
-      <HelpTip
-        label="Refresh device list"
-        lockedPlacement
-        placement="bottom"
-        showBubble={accent === 'input'}
+      <HeaderHelpTarget
+        accent={accent}
+        activeClassName="z-[70]"
+        bubbleClassName={joinClasses(
+          headerHelpBubbleClassName,
+          'whitespace-nowrap',
+        )}
+        label={
+          <>
+            <span className="sm:hidden">Refresh</span>
+            <span className="hidden sm:inline">Refresh device list</span>
+          </>
+        }
+        placement="bottom-end"
+        tipClassName="[--help-tip-gap:0.25rem]"
       >
         <RefreshButton
           accent={accent}
@@ -182,9 +219,58 @@ export function SectionHeader({
           onClick={onRefresh}
           icon={RefreshIcon}
         />
-      </HelpTip>
+      </HeaderHelpTarget>
       <SignalDot level={signalLevel} state={signalState} />
     </div>
+  );
+}
+
+function HeaderHelpTarget({
+  accent,
+  activeClassName,
+  bubbleClassName,
+  children,
+  className,
+  highlightClassName,
+  label,
+  placement,
+  tipClassName,
+}: {
+  accent: SectionAccent;
+  activeClassName?: string;
+  bubbleClassName?: string;
+  children: ReactNode;
+  className?: string;
+  highlightClassName?: string;
+  label: ReactNode;
+  placement: HelpTipPlacement;
+  tipClassName?: string;
+}) {
+  if (accent !== 'input') {
+    return (
+      <HelpTarget
+        activeClassName={activeClassName}
+        className={className}
+        highlightClassName={highlightClassName}
+      >
+        {children}
+      </HelpTarget>
+    );
+  }
+
+  return (
+    <HelpTip
+      activeClassName={activeClassName}
+      bubbleClassName={bubbleClassName}
+      className={className}
+      highlightClassName={highlightClassName}
+      label={label}
+      layout="overlay"
+      placement={placement}
+      tipClassName={tipClassName}
+    >
+      {children}
+    </HelpTip>
   );
 }
 

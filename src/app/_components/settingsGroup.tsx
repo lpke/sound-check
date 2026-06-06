@@ -13,14 +13,15 @@ export function SettingsGroup({
   helpDescription?: string;
   title?: string;
 }) {
-  const { isHelpModeActive } = useHelpMode();
+  const { isHelpModeActive, isHelpModeExiting } = useHelpMode();
   const hasHelpDescription = Boolean(helpDescription);
+  const isHelpModeOpen = isHelpModeActive && !isHelpModeExiting;
   const group = (
     <section
       data-help-anchor={hasHelpDescription ? 'true' : undefined}
       className={joinClasses(
         'border-line bg-panel-soft rounded-lg border p-4 transition-colors duration-200 ease-out',
-        isHelpModeActive && hasHelpDescription && 'border-help-warning/45',
+        isHelpModeOpen && hasHelpDescription && 'border-help-warning/45',
       )}
     >
       {title || description ? (
@@ -45,14 +46,10 @@ export function SettingsGroup({
     <HelpTip
       activeClassName="z-50"
       bubbleClassName="max-w-[18rem]"
-      className={joinClasses(
-        'block transition-[padding-top] duration-200 ease-out',
-        isHelpModeActive ? 'pt-11' : 'pt-0',
-      )}
+      className="block"
       label={helpDescription}
-      lockedPlacement
       placement="top-start"
-      shellClassName="max-w-[min(18rem,calc(100vw-2rem))]"
+      tipClassName="max-w-[min(18rem,calc(100vw-2rem))]"
     >
       {group}
     </HelpTip>

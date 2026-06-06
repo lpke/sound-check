@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { StatusTone } from '@/utils/types';
 import { clamp, joinClasses } from '@/utils/utils';
-import { HelpTip, useHelpMode } from './HelpMode';
+import { HelpLabel, HelpTarget } from './HelpMode';
 
 export function Panel({
   children,
@@ -162,12 +162,9 @@ export function LevelMeter({
   const boundedLevel = clamp(level, 0, 1);
   const [peakLevel, setPeakLevel] = useState(0);
   const [isPeakVisible, setIsPeakVisible] = useState(false);
-  const [hasSimpleHelpBubbleSettled, setHasSimpleHelpBubbleSettled] =
-    useState(false);
   const [isSpectrumVisible, setIsSpectrumVisible] = useState(
     getDefaultIsSpectrumVisible,
   );
-  const { isHelpModeActive, isHelpModeExiting } = useHelpMode();
   const latestLevelRef = useRef(boundedLevel);
   const fadeTimerRef = useRef<number | null>(null);
   const dropTimerRef = useRef<number | null>(null);
@@ -232,31 +229,6 @@ export function LevelMeter({
       }
     };
   }, []);
-
-  useEffect(() => {
-    if (!isHelpModeActive || isSpectrumVisible || accent !== 'input') {
-      const resetTimer = window.setTimeout(() => {
-        setHasSimpleHelpBubbleSettled(false);
-      }, 0);
-
-      return () => window.clearTimeout(resetTimer);
-    }
-
-    if (isHelpModeExiting) {
-      return undefined;
-    }
-
-    const showBubbleTimer = window.setTimeout(() => {
-      setHasSimpleHelpBubbleSettled(true);
-    }, 340);
-
-    return () => window.clearTimeout(showBubbleTimer);
-  }, [accent, isHelpModeActive, isHelpModeExiting, isSpectrumVisible]);
-  const canShowSimpleHelpBubble =
-    isHelpModeActive &&
-    !isSpectrumVisible &&
-    accent === 'input' &&
-    hasSimpleHelpBubbleSettled;
 
   const meterButton = (
     <button
@@ -359,34 +331,32 @@ export function LevelMeter({
     </button>
   );
 
-  const levelMeterWrapperClassName = joinClasses(
-    'block w-full transition-[margin] duration-200 ease-out',
-    isHelpModeActive && !isSpectrumVisible && accent === 'input' && 'mb-12',
-  );
+  const levelMeterWrapperClassName = 'block w-full';
 
   return (
-    <HelpTip
+    <HelpTarget
+      activeClassName="z-[70]"
       className={levelMeterWrapperClassName}
-      label="Toggle visualiser style"
-      lockedPlacement
-      placement="bottom"
-      showBubble={canShowSimpleHelpBubble}
+      highlightClassName="rounded-none"
     >
       {meterButton}
-      {isHelpModeActive && isSpectrumVisible && accent === 'input' ? (
-        <span className="pointer-events-none absolute bottom-2 left-1/2 z-40 -translate-x-1/2">
-          <span
-            className={joinClasses(
-              'help-tip-bubble block rounded-lg border px-2.5 py-1.5 text-xs leading-4 font-semibold whitespace-nowrap shadow-[0_18px_42px_rgba(15,23,42,0.28)]',
-              isHelpModeExiting &&
-                'animate-[help-tip-fade-out_160ms_ease-in_both]',
-            )}
-          >
-            Toggle visualiser style
-          </span>
-        </span>
+      {accent === 'input' ? (
+        <HelpLabel
+          align="center"
+          arrowAlign="center"
+          bubbleClassName="whitespace-nowrap"
+          className="pointer-events-none max-w-[calc(100vw-2rem)]"
+          label="Toggle visualiser style"
+          layout="overlay"
+          placement="bottom"
+          style={{
+            '--help-tip-gap': '0.5rem',
+            '--help-tip-pinned-top': '2.625rem',
+            top: 'min(var(--help-tip-pinned-top), calc(100% + var(--help-tip-gap)))',
+          }}
+        />
       ) : null}
-    </HelpTip>
+    </HelpTarget>
   );
 }
 
