@@ -15,6 +15,22 @@ import { ChevronDownIcon, RefreshIcon } from './icons';
 const MOBILE_IO_STICKY_MEDIA_QUERY = '(max-width: 639px)';
 const IO_STICKY_BOTTOM_BUFFER_PX = 168;
 
+type StickyState = {
+  height: number;
+  isSticky: boolean;
+  left: number;
+  top: number;
+  width: number;
+};
+
+const defaultStickyState: StickyState = {
+  height: 0,
+  isSticky: false,
+  left: 0,
+  top: 0,
+  width: 0,
+};
+
 export function SectionShell({
   children,
   muted,
@@ -44,20 +60,12 @@ export function StickyIoChrome({ children }: { children: ReactNode }) {
   const { isHelpModeActive } = useHelpMode();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chromeRef = useRef<HTMLDivElement | null>(null);
-  const [stickyState, setStickyState] = useState<{
-    height: number;
-    isSticky: boolean;
-    left: number;
-    width: number;
-  }>({
-    height: 0,
-    isSticky: false,
-    left: 0,
-    width: 0,
-  });
+  const [stickyState, setStickyState] =
+    useState<StickyState>(defaultStickyState);
 
   useEffect(() => {
     const mobileQuery = window.matchMedia(MOBILE_IO_STICKY_MEDIA_QUERY);
+    const visualViewport = window.visualViewport;
     let frame: number | null = null;
 
     const updateStickyState = () => {
@@ -74,30 +82,38 @@ export function StickyIoChrome({ children }: { children: ReactNode }) {
         !(chrome instanceof HTMLElement) ||
         !(section instanceof HTMLElement)
       ) {
-        setStickyState((currentState) =>
-          currentState.isSticky
-            ? { height: 0, isSticky: false, left: 0, width: 0 }
-            : currentState,
-        );
+        setStickyState((currentState) => {
+          if (isSameStickyState(currentState, defaultStickyState)) {
+            return currentState;
+          }
+
+          return defaultStickyState;
+        });
         return;
       }
 
       const sectionRect = section.getBoundingClientRect();
-      const chromeHeight =
-        stickyState.height || chrome.getBoundingClientRect().height;
-      const topOffset = 0;
-      const sectionHasReachedTop = sectionRect.top <= topOffset;
+      const chromeHeight = chrome.getBoundingClientRect().height;
+      const viewportTopOffset = getVisualViewportTopOffset();
+      const sectionHasReachedTop = sectionRect.top <= viewportTopOffset;
       const hasEnoughSectionBelow =
         sectionRect.bottom >=
-        topOffset + chromeHeight + IO_STICKY_BOTTOM_BUFFER_PX;
+        viewportTopOffset + chromeHeight + IO_STICKY_BOTTOM_BUFFER_PX;
       const shouldStick = sectionHasReachedTop && hasEnoughSectionBelow;
 
-      setStickyState({
+      const nextStickyState = {
         height: chromeHeight,
         isSticky: shouldStick,
         left: sectionRect.left,
+        top: viewportTopOffset,
         width: sectionRect.width,
-      });
+      };
+
+      setStickyState((currentState) =>
+        isSameStickyState(currentState, nextStickyState)
+          ? currentState
+          : nextStickyState,
+      );
     };
 
     const scheduleStickyUpdate = () => {
@@ -110,6 +126,10 @@ export function StickyIoChrome({ children }: { children: ReactNode }) {
 
     scheduleStickyUpdate();
     mobileQuery.addEventListener('change', scheduleStickyUpdate);
+    visualViewport?.addEventListener('resize', scheduleStickyUpdate);
+    visualViewport?.addEventListener('scroll', scheduleStickyUpdate, {
+      passive: true,
+    });
     window.addEventListener('scroll', scheduleStickyUpdate, { passive: true });
     window.addEventListener('resize', scheduleStickyUpdate);
 
@@ -119,10 +139,12 @@ export function StickyIoChrome({ children }: { children: ReactNode }) {
       }
 
       mobileQuery.removeEventListener('change', scheduleStickyUpdate);
+      visualViewport?.removeEventListener('resize', scheduleStickyUpdate);
+      visualViewport?.removeEventListener('scroll', scheduleStickyUpdate);
       window.removeEventListener('scroll', scheduleStickyUpdate);
       window.removeEventListener('resize', scheduleStickyUpdate);
     };
-  }, [isHelpModeActive, stickyState.height]);
+  }, [isHelpModeActive]);
 
   return (
     <div
@@ -143,7 +165,7 @@ export function StickyIoChrome({ children }: { children: ReactNode }) {
             ? {
                 left: stickyState.left,
                 position: 'fixed',
-                top: 0,
+                top: `calc(${stickyState.top}px + env(safe-area-inset-top, 0px))`,
                 width: stickyState.width,
                 zIndex: 35,
               }
@@ -153,6 +175,23 @@ export function StickyIoChrome({ children }: { children: ReactNode }) {
         {children}
       </div>
     </div>
+  );
+}
+
+function getVisualViewportTopOffset() {
+  return Math.max(0, window.visualViewport?.offsetTop ?? 0);
+}
+
+function isSameStickyState(
+  currentState: StickyState,
+  nextStickyState: StickyState,
+) {
+  return (
+    currentState.height === nextStickyState.height &&
+    currentState.isSticky === nextStickyState.isSticky &&
+    currentState.left === nextStickyState.left &&
+    currentState.top === nextStickyState.top &&
+    currentState.width === nextStickyState.width
   );
 }
 
