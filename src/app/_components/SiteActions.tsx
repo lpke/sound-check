@@ -9,7 +9,8 @@ export function SiteActions({
 }: {
   soundCheck: SoundCheckController;
 }) {
-  const { closeHelpMode, isHelpModeActive } = useHelpMode();
+  const { closeHelpMode, isHelpModeActive, isHelpModeExiting } = useHelpMode();
+  const shouldCloseDebugForHelp = isHelpModeActive && !isHelpModeExiting;
 
   return (
     <div
@@ -33,7 +34,7 @@ export function SiteActions({
       <div className="flex items-center gap-2">
         <HelpModeButton />
         <DebugModal
-          closeWhen={isHelpModeActive}
+          closeWhen={shouldCloseDebugForHelp}
           soundCheck={soundCheck}
           onOpen={closeHelpMode}
         />

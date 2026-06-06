@@ -331,19 +331,6 @@ export function LevelMeter({
                 : 'from-input-soft/45',
             )}
           />
-          {isHelpModeActive && accent === 'input' ? (
-            <span className="pointer-events-none absolute bottom-2 left-1/2 z-40 -translate-x-1/2">
-              <span
-                className={joinClasses(
-                  'help-tip-bubble block rounded-lg border px-2.5 py-1.5 text-xs leading-4 font-semibold whitespace-nowrap shadow-[0_18px_42px_rgba(15,23,42,0.28)]',
-                  isHelpModeExiting &&
-                    'animate-[help-tip-fade-out_160ms_ease-in_both]',
-                )}
-              >
-                Toggle visualiser style
-              </span>
-            </span>
-          ) : null}
         </>
       ) : (
         segments.map((segment) => {
@@ -386,6 +373,19 @@ export function LevelMeter({
       showBubble={canShowSimpleHelpBubble}
     >
       {meterButton}
+      {isHelpModeActive && isSpectrumVisible && accent === 'input' ? (
+        <span className="pointer-events-none absolute bottom-2 left-1/2 z-40 -translate-x-1/2">
+          <span
+            className={joinClasses(
+              'help-tip-bubble block rounded-lg border px-2.5 py-1.5 text-xs leading-4 font-semibold whitespace-nowrap shadow-[0_18px_42px_rgba(15,23,42,0.28)]',
+              isHelpModeExiting &&
+                'animate-[help-tip-fade-out_160ms_ease-in_both]',
+            )}
+          >
+            Toggle visualiser style
+          </span>
+        </span>
+      ) : null}
     </HelpTip>
   );
 }
