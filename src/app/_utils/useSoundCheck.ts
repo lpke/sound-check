@@ -135,7 +135,7 @@ export function useSoundCheck() {
   const [appPaused, setAppPaused] = useState(false);
   const [inputMuted, setInputMuted] = useState(false);
   const [outputMuted, setOutputMuted] = useState(false);
-  const [processingEnabled, setProcessingEnabled] = useState(false);
+  const [processingEnabled, setProcessingEnabled] = useState(true);
   const [processingSettings, setProcessingSettings] =
     useState<ProcessingSettings>(defaultProcessingSettings);
   const [speakerTestSettings, setSpeakerTestSettings] =
