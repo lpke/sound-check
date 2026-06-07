@@ -192,7 +192,7 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
             ) : (
               <div>
                 <Button
-                  variant="outputPrimary"
+                  variant={isToneTestPlaying ? 'danger' : 'outputPrimary'}
                   className="w-40"
                   onClick={
                     isToneTestPlaying
