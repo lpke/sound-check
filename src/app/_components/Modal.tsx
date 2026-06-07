@@ -267,7 +267,10 @@ export function Modal({
                   className,
                 )}
               >
-                <div className="border-line hidden min-w-0 items-center justify-between gap-4 border-b px-5 py-4 sm:flex">
+                <div
+                  data-modal-header
+                  className="border-line min-w-0 items-center justify-between gap-4 border-b px-5 py-4"
+                >
                   <h2 className="text-foreground min-w-0 flex-1 text-lg leading-tight font-semibold">
                     {title}
                   </h2>

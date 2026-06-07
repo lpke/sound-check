@@ -3,7 +3,6 @@
 import {
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ChangeEvent,
   type SVGProps,
@@ -68,7 +67,7 @@ const debugMimeTypes = [
   'audio/ogg;codecs=opus',
 ];
 
-const DEBUG_TEXT_REFRESH_MS = 250;
+const DEBUG_TEXT_REFRESH_MS = 100;
 
 export function DebugModal({
   closeWhen,
@@ -80,17 +79,18 @@ export function DebugModal({
     defaultIncludedSections,
   );
   const runtimeInfo = useMemo(() => getRuntimeInfo(), []);
-  const [isDebugTextPaused, setIsDebugTextPaused] = useState(false);
+  const [isDebugTextFocused, setIsDebugTextFocused] = useState(false);
   const [copyState, setCopyState] = useState<'copied' | 'idle' | 'failed'>(
     'idle',
   );
-  const [editedDebugText, setEditedDebugText] = useState<string | null>(null);
-  const latestDebugTextRef = useRef('');
-  const [forceRefreshTick, setForceRefreshTick] = useState(0);
+  const [debugGeneratedAt, setDebugGeneratedAt] = useState(() =>
+    new Date().toISOString(),
+  );
+  const [focusedDebugText, setFocusedDebugText] = useState<string | null>(null);
 
   const debugText = useMemo(() => {
     const payload: Record<string, unknown> = {
-      generatedAt: new Date().toISOString(),
+      generatedAt: debugGeneratedAt,
       note: 'Sound Check debug snapshot. Device labels can be blank before microphone permission is granted.',
     };
 
@@ -196,50 +196,40 @@ export function DebugModal({
     }
 
     return JSON.stringify(payload, null, 2);
-  }, [includedSections, runtimeInfo, soundCheck]);
-  const [displayedDebugText, setDisplayedDebugText] = useState(debugText);
+  }, [debugGeneratedAt, includedSections, runtimeInfo, soundCheck]);
 
   useEffect(() => {
-    latestDebugTextRef.current = debugText;
-  }, [debugText]);
-
-  useEffect(() => {
-    if (isDebugTextPaused) {
+    if (isDebugTextFocused) {
       return;
     }
 
-    if (forceRefreshTick > 0) {
-      setDisplayedDebugText(latestDebugTextRef.current);
-      setForceRefreshTick(0);
-    }
-
-    setDisplayedDebugText(latestDebugTextRef.current);
-
     const intervalId = window.setInterval(() => {
-      setDisplayedDebugText(latestDebugTextRef.current);
+      setDebugGeneratedAt(new Date().toISOString());
     }, DEBUG_TEXT_REFRESH_MS);
 
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [isDebugTextPaused, forceRefreshTick]);
+  }, [isDebugTextFocused]);
 
-  const shownDebugText = editedDebugText ?? displayedDebugText;
+  const shownDebugText =
+    isDebugTextFocused && focusedDebugText !== null
+      ? focusedDebugText
+      : debugText;
 
-  function handlePauseToggle() {
-    if (isDebugTextPaused) {
-      setEditedDebugText(null);
-      setDisplayedDebugText(latestDebugTextRef.current);
-      setIsDebugTextPaused(false);
-      return;
-    }
+  function handleDebugTextFocus() {
+    setFocusedDebugText(debugText);
+    setIsDebugTextFocused(true);
+  }
 
-    setIsDebugTextPaused(true);
+  function handleDebugTextBlur() {
+    setFocusedDebugText(null);
+    setIsDebugTextFocused(false);
+    setDebugGeneratedAt(new Date().toISOString());
   }
 
   function handleDebugTextChange(event: ChangeEvent<HTMLTextAreaElement>) {
-    setEditedDebugText(event.target.value);
-    setIsDebugTextPaused(true);
+    setFocusedDebugText(event.target.value);
   }
 
   async function copyDebugText() {
@@ -253,9 +243,8 @@ export function DebugModal({
   }
 
   function handleIncludedSectionToggle(sectionKey: DebugSectionKey) {
-    setEditedDebugText(null);
-    setIsDebugTextPaused(false);
-    setForceRefreshTick((current) => current + 1);
+    setFocusedDebugText(null);
+    setDebugGeneratedAt(new Date().toISOString());
     setIncludedSections((currentSections) => ({
       ...currentSections,
       [sectionKey]: !currentSections[sectionKey],
@@ -264,6 +253,7 @@ export function DebugModal({
 
   return (
     <Modal
+      className="debug-modal-panel"
       closeWhen={closeWhen}
       title="Audio debug information"
       modalAriaLabel="Audio debug information"
@@ -281,8 +271,8 @@ export function DebugModal({
         </span>
       }
     >
-      <div className="grid gap-4">
-        <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
+      <div className="flex min-h-full flex-col gap-4">
+        <div className="grid shrink-0 grid-cols-2 gap-2 lg:grid-cols-3">
           {debugSections.map((section) => {
             const isIncluded = includedSections[section.key];
 
@@ -292,8 +282,9 @@ export function DebugModal({
                 type="button"
                 aria-pressed={isIncluded}
                 onClick={() => handleIncludedSectionToggle(section.key)}
+                data-debug-filter-button
                 className={joinClasses(
-                  'inline-flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm font-semibold transition focus:outline-none active:translate-y-px active:scale-[0.985]',
+                  'inline-flex items-center gap-2 rounded-lg border px-3 text-left text-sm font-semibold transition focus:outline-none active:translate-y-px active:scale-[0.985]',
                   isIncluded
                     ? 'border-line bg-panel-soft/80 text-foreground hover:border-line hover:bg-panel-soft/80'
                     : 'border-line bg-panel-soft/80 text-muted hover:border-line hover:bg-panel-soft/80',
@@ -316,37 +307,19 @@ export function DebugModal({
           })}
         </div>
 
-        <div className="group/debug-field relative">
-          <div
-            className={joinClasses(
-              'absolute top-2 right-2 z-10 flex items-center gap-2 transition',
-              isDebugTextPaused
-                ? 'opacity-100'
-                : 'opacity-0 group-hover/debug-field:opacity-100 focus-within:opacity-100',
-            )}
-          >
-            <button
-              type="button"
-              aria-label={
-                isDebugTextPaused
-                  ? 'Resume debug JSON updates'
-                  : 'Pause debug JSON updates'
-              }
-              title={
-                isDebugTextPaused
-                  ? 'Resume debug JSON updates'
-                  : 'Pause debug JSON updates'
-              }
-              onClick={handlePauseToggle}
-              className="border-line bg-panel/90 hover:bg-panel hover:text-foreground inline-flex h-8 w-16 items-center justify-center rounded-md border px-1.5 text-[10px] font-semibold transition focus:outline-none active:translate-y-px active:scale-95"
-            >
-              {isDebugTextPaused ? 'Resume' : 'Pause'}
-            </button>
+        <div className="group/debug-field relative -mx-5 -mb-5 flex min-h-0 flex-1 flex-col">
+          <div className="absolute top-2 right-2 z-10 flex items-center gap-2 opacity-0 transition group-focus-within/debug-field:opacity-100 group-hover/debug-field:opacity-100 focus-within:opacity-100">
+            {isDebugTextFocused ? (
+              <span className="border-warning/40 bg-warning-soft text-warning rounded-md border px-2.5 py-1.5 text-xs leading-none font-bold shadow-sm">
+                Paused
+              </span>
+            ) : null}
             <button
               type="button"
               aria-label="Copy debug JSON"
               title="Copy debug JSON"
               onClick={copyDebugText}
+              onMouseDown={(event) => event.preventDefault()}
               className={joinClasses(
                 'inline-flex h-8 w-8 items-center justify-center rounded-md border text-sm transition focus:outline-none active:translate-y-px active:scale-95',
                 copyState === 'copied'
@@ -365,12 +338,17 @@ export function DebugModal({
           </div>
 
           <textarea
+            data-debug-textarea
             data-modal-scroll
             aria-label="Editable debug information JSON"
             value={shownDebugText}
             onChange={handleDebugTextChange}
+            onFocus={handleDebugTextFocus}
+            onBlur={handleDebugTextBlur}
             spellCheck={false}
-            className="border-line bg-panel-soft text-foreground focus:border-control focus:ring-control-soft h-[42svh] min-h-60 w-full resize-y overflow-auto rounded-lg border p-4 pr-16 font-mono text-xs leading-5 outline-none focus:ring-4 sm:h-[50svh] sm:min-h-80"
+            wrap="off"
+            style={{ fontFamily: 'var(--font-mono), ui-monospace, monospace' }}
+            className="border-line bg-panel-soft text-foreground block h-full min-h-0 w-full flex-1 resize-y overflow-auto rounded-none border border-x-0 border-b-0 p-4 pr-12 font-mono text-xs leading-5 whitespace-pre outline-none"
           />
         </div>
       </div>

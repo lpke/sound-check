@@ -27,3 +27,5 @@ If asked to make changes that require Next.js specific knowledge, the following 
 - IO SECTION = the container for input/output settings.
 - IO HEADER = the part of an input/output section with the background color. It contains the icon, selected device, and status indicator dot on the right.
 - IO STATUS = the dot on the right of each IO section's header
+- SHEET MODAL = the compact card-like modal presentation used when the viewport is narrow or short. It has no modal heading, no close button, and compact controls.
+- DIALOG MODAL = the larger floating modal presentation used when the viewport is wide and tall enough. It has the modal heading, close button, and normal controls.
