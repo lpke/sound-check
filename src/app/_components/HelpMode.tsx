@@ -217,6 +217,7 @@ export function HelpTip({
       align={shouldShowBubble && layout === 'flow' ? alignment : undefined}
       className={className}
       flow={shouldShowBubble && layout === 'flow' ? basePlacement : undefined}
+      hasHelpLabel={shouldShowBubble}
       isExiting={isHelpModeExiting}
       highlightClassName={highlightClassName}
     >
@@ -300,6 +301,7 @@ export function HelpTarget({
   children,
   className,
   flow,
+  hasHelpLabel,
   isExiting,
   highlightClassName = 'rounded-lg',
 }: {
@@ -308,6 +310,7 @@ export function HelpTarget({
   children: ReactNode;
   className?: string;
   flow?: HelpTipBasePlacement;
+  hasHelpLabel?: boolean;
   isExiting?: boolean;
   highlightClassName?: string;
 }) {
@@ -318,6 +321,7 @@ export function HelpTarget({
       data-help-align={align}
       data-help-flow={flow}
       data-help-flow-exiting={isExiting ? 'true' : undefined}
+      data-help-has-label={hasHelpLabel ? 'true' : undefined}
       data-help-target="true"
       className={joinClasses(
         'relative',

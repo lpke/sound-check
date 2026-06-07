@@ -50,7 +50,7 @@ export function StickyIoChrome({ children }: { children: ReactNode }) {
       className={joinClasses(
         'transition-[margin] duration-200 ease-out',
         isSticky &&
-          'mobile-safe-area-sticky-top sticky z-[35] sm:static sm:z-auto sm:shadow-none',
+          'mobile-safe-area-sticky-top sticky z-[35] shadow-[0_2px_8px_rgba(15,23,42,0.14)] sm:static sm:z-auto sm:shadow-none',
       )}
     >
       <div

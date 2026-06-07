@@ -137,7 +137,10 @@ button:not(:disabled):not([tabindex='-1']),
   transition: opacity 200ms ease-out;
 }
 
-[data-io-section-muted='true'] .help-target-shell::after {
+[data-io-section-muted='true']
+  .help-target-shell:not([data-help-has-label='true']):not(
+    :has([data-help-tip-shell='true'])
+  )::after {
   opacity: 1;
 }
 
