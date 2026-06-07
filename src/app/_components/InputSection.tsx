@@ -51,7 +51,7 @@ export function InputSection({ soundCheck }: SoundCheckProps) {
 
 function ProcessingBlock({ soundCheck }: SoundCheckProps) {
   return (
-    <SettingsGroup helpDescription="Uses browser audio apis">
+    <SettingsGroup>
       <div className="flex items-center justify-between gap-4">
         <label
           htmlFor="processing-enabled"

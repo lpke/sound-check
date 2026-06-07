@@ -47,6 +47,7 @@ export function Modal({
   triggerStyle,
 }: ModalProps) {
   const triggerRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const touchStartRef = useRef<{
     scrollContainer: HTMLElement | null;
@@ -192,7 +193,11 @@ export function Modal({
     };
 
     document.addEventListener('keydown', handleKeyDown);
-    closeButtonRef.current?.focus();
+    if (closeButtonRef.current?.getClientRects().length) {
+      closeButtonRef.current.focus();
+    } else {
+      panelRef.current?.focus();
+    }
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
@@ -229,8 +234,9 @@ export function Modal({
       {isVisible
         ? createPortal(
             <div
-              className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto px-3 py-6 sm:px-4 md:py-8"
+              className="fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto px-3 py-6 sm:px-4 md:py-8"
               data-modal-root
+              data-modal-state={isClosing ? 'closing' : 'open'}
               role="dialog"
               aria-modal="true"
               aria-label={modalAriaLabel}
@@ -238,33 +244,12 @@ export function Modal({
               onPointerDown={(event) => event.stopPropagation()}
               onPointerUp={(event) => event.stopPropagation()}
             >
-              <style>{`
-                @keyframes modalOverlayIn {
-                  from { opacity: 0; }
-                  to { opacity: 1; }
-                }
-                @keyframes modalOverlayOut {
-                  from { opacity: 1; }
-                  to { opacity: 0; }
-                }
-                @keyframes modalGrowIn {
-                  from { opacity: 0; transform: translateY(10px) scale(0.96); }
-                  to { opacity: 1; transform: translateY(0) scale(1); }
-                }
-                @keyframes modalGrowOut {
-                  from { opacity: 1; transform: translateY(0) scale(1); }
-                  to { opacity: 0; transform: translateY(8px) scale(0.97); }
-                }
-              `}</style>
               <button
                 type="button"
                 tabIndex={-1}
-                className={joinClasses(
-                  'will-change-opacity absolute inset-0 cursor-default bg-black/45 backdrop-blur-sm',
-                  isClosing
-                    ? 'animate-[modalOverlayOut_260ms_ease-in_both]'
-                    : 'animate-[modalOverlayIn_300ms_ease-out_both]',
-                )}
+                data-modal-overlay
+                data-modal-state={isClosing ? 'closing' : 'open'}
+                className="will-change-opacity absolute inset-0 cursor-default bg-black/45 backdrop-blur-sm"
                 aria-label="Close modal"
                 onClick={(event) => {
                   event.stopPropagation();
@@ -273,18 +258,17 @@ export function Modal({
               />
 
               <div
+                ref={panelRef}
                 data-modal-panel
                 data-modal-state={isClosing ? 'closing' : 'open'}
+                tabIndex={-1}
                 className={joinClasses(
-                  'bg-panel border-line relative z-10 flex max-h-[calc(100svh-7rem)] w-full max-w-lg transform-gpu flex-col overflow-hidden rounded-lg border shadow-[0_28px_90px_rgba(15,23,42,0.24)] will-change-transform sm:max-h-[90svh] md:max-h-[88vh] md:max-w-3xl',
-                  isClosing
-                    ? 'animate-[modalGrowOut_220ms_ease-in_both]'
-                    : 'animate-[modalGrowIn_260ms_cubic-bezier(0.16,1,0.3,1)_both]',
+                  'bg-panel border-line relative z-10 flex max-h-[calc(100svh-7rem)] w-full max-w-lg flex-col overflow-hidden rounded-lg border shadow-[0_28px_90px_rgba(15,23,42,0.24)] sm:max-h-[90svh] md:max-h-[88vh] md:max-w-3xl',
                   className,
                 )}
               >
-                <div className="border-line flex min-w-0 items-center justify-between gap-4 border-b px-5 py-4">
-                  <h2 className="text-foreground min-w-0 flex-1 text-xl leading-tight font-semibold">
+                <div className="border-line hidden min-w-0 items-center justify-between gap-4 border-b px-5 py-4 sm:flex">
+                  <h2 className="text-foreground min-w-0 flex-1 text-lg leading-tight font-semibold">
                     {title}
                   </h2>
                   <button

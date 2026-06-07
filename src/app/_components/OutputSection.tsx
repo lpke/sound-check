@@ -312,137 +312,137 @@ function RecordingPlayback({ soundCheck }: SoundCheckProps) {
   }
 
   return (
-    <SettingsGroup
-      title="Recorded playback"
-      helpDescription="Recorded clips appear here"
-    >
-      <div className="grid gap-2">
-        {shouldShowHelpDemo ? (
-          <div
-            className={joinClasses(
-              'recorded-clip-item overflow-hidden',
-              isHelpModeExiting
-                ? 'recorded-clip-exiting pointer-events-none'
-                : 'recorded-clip-entering',
-            )}
-          >
-            <div className="recorded-clip-inner min-h-0 overflow-hidden">
-              <HelpDemoRecordedClip />
-            </div>
-          </div>
-        ) : soundCheck.recordedClips.length === 0 ? (
-          <p className="text-muted text-sm">No recordings yet.</p>
-        ) : (
-          soundCheck.recordedClips.map((clip, index) => {
-            const isActive =
-              soundCheck.recordedPlayback.activeClipId === clip.id;
-            const isPlaying = isActive && soundCheck.recordedPlayback.isPlaying;
-            const positionSeconds =
-              soundCheck.recordedPlayback.positionsByClipId[clip.id] ?? 0;
-            const recordingName = clip.name || 'Recording';
-            const shouldShowRenameHelp = isHelpModeActive && index === 0;
-            const shouldUnderlineRename = isRenameHelpActive && index === 0;
-            const recordingNameInput = (
-              <input
-                id={`recorded-clip-name-${clip.id}`}
-                name={`recorded-clip-name-${clip.id}`}
-                type="text"
-                value={clip.name}
-                onChange={(event) =>
-                  soundCheck.renameRecordedClip(clip.id, event.target.value)
-                }
-                onFocus={() => soundCheck.selectRecordedClip(clip.id)}
-                onPointerDown={() => soundCheck.selectRecordedClip(clip.id)}
-                placeholder="Recording"
-                aria-label="Rename recording"
-                title="Rename recording"
-                className={joinClasses(
-                  'text-foreground focus:border-b-output h-7 w-full min-w-0 border-b border-transparent bg-transparent px-0 text-sm leading-tight transition focus:ring-0 focus:outline-none',
-                  shouldUnderlineRename && 'border-b-output/80',
-                )}
-              />
-            );
-
-            return (
-              <div
-                key={clip.id}
-                className={joinClasses(
-                  'recorded-clip-item overflow-hidden',
-                  enteringClipIds.has(clip.id) && 'recorded-clip-entering',
-                  exitingClipIds.has(clip.id) &&
-                    'recorded-clip-exiting pointer-events-none',
-                )}
-              >
-                <div className="recorded-clip-inner min-h-0 overflow-hidden">
-                  <div className="grid gap-3 py-2">
-                    <div className="grid gap-2">
-                      {shouldShowRenameHelp ? (
-                        <HelpTip
-                          className="w-full"
-                          label="Clips can be renamed"
-                          placement="top"
-                          tipClassName="[--help-tip-gap:0.375rem]"
-                        >
-                          {recordingNameInput}
-                        </HelpTip>
-                      ) : (
-                        recordingNameInput
-                      )}
-                      <span
-                        className="text-muted block text-xs"
-                        title={clip.inputDeviceName}
-                      >
-                        Device: {clip.inputDeviceName}
-                      </span>
-                    </div>
-                    <AudioPlaybackControls
-                      buttonLabel={
-                        isPlaying
-                          ? `Pause ${recordingName}`
-                          : `Play ${recordingName}`
-                      }
-                      canUseTransport={
-                        !soundCheck.appPaused &&
-                        !soundCheck.outputMuted &&
-                        clip.durationSeconds > 0
-                      }
-                      durationSeconds={clip.durationSeconds}
-                      isPlaying={isPlaying}
-                      onSeek={(nextPosition) => {
-                        soundCheck.selectRecordedClip(clip.id);
-                        soundCheck.handleRecordedClipSeek(
-                          clip.id,
-                          nextPosition,
-                        );
-                      }}
-                      onToggle={() => {
-                        soundCheck.selectRecordedClip(clip.id);
-                        soundCheck.toggleRecordedClipPlayback(clip.id);
-                      }}
-                      positionSeconds={positionSeconds}
-                      sideControls={
-                        <PlaybackIconButton
-                          label={`Delete ${recordingName}`}
-                          onClick={() => handleDeleteRecordedClip(clip.id)}
-                          tone="danger"
-                        >
-                          <TrashIcon aria-hidden="true" className="h-5 w-5" />
-                        </PlaybackIconButton>
-                      }
-                      seekLabel={`${recordingName} playback position`}
-                      seekName={`recorded-clip-position-${clip.id}`}
-                    />
-                  </div>
-                  {index < soundCheck.recordedClips.length - 1 ? (
-                    <hr className="border-line -mx-1 mt-2 border-t" />
-                  ) : null}
-                </div>
+    <HelpTarget activeClassName="z-50" className="block">
+      <SettingsGroup title="Recorded playback">
+        <div className="grid gap-2">
+          {shouldShowHelpDemo ? (
+            <div
+              className={joinClasses(
+                'recorded-clip-item overflow-hidden',
+                isHelpModeExiting
+                  ? 'recorded-clip-exiting pointer-events-none'
+                  : 'recorded-clip-entering',
+              )}
+            >
+              <div className="recorded-clip-inner min-h-0 overflow-hidden">
+                <HelpDemoRecordedClip />
               </div>
-            );
-          })
-        )}
-      </div>
-    </SettingsGroup>
+            </div>
+          ) : soundCheck.recordedClips.length === 0 ? (
+            <p className="text-muted text-sm">No recordings yet.</p>
+          ) : (
+            soundCheck.recordedClips.map((clip, index) => {
+              const isActive =
+                soundCheck.recordedPlayback.activeClipId === clip.id;
+              const isPlaying =
+                isActive && soundCheck.recordedPlayback.isPlaying;
+              const positionSeconds =
+                soundCheck.recordedPlayback.positionsByClipId[clip.id] ?? 0;
+              const recordingName = clip.name || 'Recording';
+              const shouldShowRenameHelp = isHelpModeActive && index === 0;
+              const shouldUnderlineRename = isRenameHelpActive && index === 0;
+              const recordingNameInput = (
+                <input
+                  id={`recorded-clip-name-${clip.id}`}
+                  name={`recorded-clip-name-${clip.id}`}
+                  type="text"
+                  value={clip.name}
+                  onChange={(event) =>
+                    soundCheck.renameRecordedClip(clip.id, event.target.value)
+                  }
+                  onFocus={() => soundCheck.selectRecordedClip(clip.id)}
+                  onPointerDown={() => soundCheck.selectRecordedClip(clip.id)}
+                  placeholder="Recording"
+                  aria-label="Rename recording"
+                  title="Rename recording"
+                  className={joinClasses(
+                    'text-foreground focus:border-b-output h-7 w-full min-w-0 border-b border-transparent bg-transparent px-0 text-sm leading-tight transition focus:ring-0 focus:outline-none',
+                    shouldUnderlineRename && 'border-b-output/80',
+                  )}
+                />
+              );
+
+              return (
+                <div
+                  key={clip.id}
+                  className={joinClasses(
+                    'recorded-clip-item overflow-hidden',
+                    enteringClipIds.has(clip.id) && 'recorded-clip-entering',
+                    exitingClipIds.has(clip.id) &&
+                      'recorded-clip-exiting pointer-events-none',
+                  )}
+                >
+                  <div className="recorded-clip-inner min-h-0 overflow-hidden">
+                    <div className="grid gap-3 py-2">
+                      <div className="grid gap-2">
+                        {shouldShowRenameHelp ? (
+                          <HelpTip
+                            className="w-full"
+                            label="Clips can be renamed"
+                            placement="top"
+                            tipClassName="[--help-tip-gap:0.375rem]"
+                          >
+                            {recordingNameInput}
+                          </HelpTip>
+                        ) : (
+                          recordingNameInput
+                        )}
+                        <span
+                          className="text-muted block text-xs"
+                          title={clip.inputDeviceName}
+                        >
+                          Device: {clip.inputDeviceName}
+                        </span>
+                      </div>
+                      <AudioPlaybackControls
+                        buttonLabel={
+                          isPlaying
+                            ? `Pause ${recordingName}`
+                            : `Play ${recordingName}`
+                        }
+                        canUseTransport={
+                          !soundCheck.appPaused &&
+                          !soundCheck.outputMuted &&
+                          clip.durationSeconds > 0
+                        }
+                        durationSeconds={clip.durationSeconds}
+                        isPlaying={isPlaying}
+                        onSeek={(nextPosition) => {
+                          soundCheck.selectRecordedClip(clip.id);
+                          soundCheck.handleRecordedClipSeek(
+                            clip.id,
+                            nextPosition,
+                          );
+                        }}
+                        onToggle={() => {
+                          soundCheck.selectRecordedClip(clip.id);
+                          soundCheck.toggleRecordedClipPlayback(clip.id);
+                        }}
+                        positionSeconds={positionSeconds}
+                        sideControls={
+                          <PlaybackIconButton
+                            label={`Delete ${recordingName}`}
+                            onClick={() => handleDeleteRecordedClip(clip.id)}
+                            tone="danger"
+                          >
+                            <TrashIcon aria-hidden="true" className="h-5 w-5" />
+                          </PlaybackIconButton>
+                        }
+                        seekLabel={`${recordingName} playback position`}
+                        seekName={`recorded-clip-position-${clip.id}`}
+                      />
+                    </div>
+                    {index < soundCheck.recordedClips.length - 1 ? (
+                      <hr className="border-line -mx-1 mt-2 border-t" />
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </SettingsGroup>
+    </HelpTarget>
   );
 }
 

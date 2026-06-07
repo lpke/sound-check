@@ -34,7 +34,7 @@ export function SectionShell({
       <div
         aria-hidden="true"
         className={joinClasses(
-          'pointer-events-none absolute inset-0 z-[45] bg-slate-200/35 backdrop-grayscale transition-opacity duration-200 ease-out',
+          'pointer-events-none absolute inset-0 z-[45] bg-slate-200/35 backdrop-grayscale transition-opacity duration-300 ease-out',
           muted ? 'opacity-100' : 'opacity-0',
         )}
       />

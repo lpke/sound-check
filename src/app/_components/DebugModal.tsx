@@ -252,6 +252,16 @@ export function DebugModal({
     }
   }
 
+  function handleIncludedSectionToggle(sectionKey: DebugSectionKey) {
+    setEditedDebugText(null);
+    setIsDebugTextPaused(false);
+    setForceRefreshTick((current) => current + 1);
+    setIncludedSections((currentSections) => ({
+      ...currentSections,
+      [sectionKey]: !currentSections[sectionKey],
+    }));
+  }
+
   return (
     <Modal
       closeWhen={closeWhen}
@@ -272,33 +282,38 @@ export function DebugModal({
       }
     >
       <div className="grid gap-4">
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {debugSections.map((section) => (
-            <label
-              key={section.key}
-              className="border-line bg-panel-soft flex items-center gap-2 rounded-lg border px-3 py-2 text-sm select-none"
-            >
-              <input
-                type="checkbox"
-                checked={includedSections[section.key]}
-                onChange={(event) => {
-                  const checked = event.target.checked;
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
+          {debugSections.map((section) => {
+            const isIncluded = includedSections[section.key];
 
-                  setEditedDebugText(null);
-                  setIsDebugTextPaused(false);
-                  setForceRefreshTick((current) => current + 1);
-                  setIncludedSections((currentSections) => ({
-                    ...currentSections,
-                    [section.key]: checked,
-                  }));
-                }}
-                className="accent-control h-4 w-4"
-              />
-              <span className="text-foreground font-semibold">
-                {section.label}
-              </span>
-            </label>
-          ))}
+            return (
+              <button
+                key={section.key}
+                type="button"
+                aria-pressed={isIncluded}
+                onClick={() => handleIncludedSectionToggle(section.key)}
+                className={joinClasses(
+                  'inline-flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm font-semibold transition focus:outline-none active:translate-y-px active:scale-[0.985]',
+                  isIncluded
+                    ? 'border-line bg-panel-soft/80 text-foreground hover:border-line hover:bg-panel-soft/80'
+                    : 'border-line bg-panel-soft/80 text-muted hover:border-line hover:bg-panel-soft/80',
+                )}
+              >
+                <span
+                  aria-hidden="true"
+                  className={joinClasses(
+                    'flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border transition',
+                    isIncluded
+                      ? 'border-control bg-control text-on-control'
+                      : 'border-muted/45 bg-panel text-transparent',
+                  )}
+                >
+                  <CheckIcon className="h-3 w-3" />
+                </span>
+                <span className="min-w-0 leading-tight">{section.label}</span>
+              </button>
+            );
+          })}
         </div>
 
         <div className="group/debug-field relative">
@@ -323,7 +338,7 @@ export function DebugModal({
                   : 'Pause debug JSON updates'
               }
               onClick={handlePauseToggle}
-              className="border-line bg-panel/90 hover:bg-panel hover:text-foreground inline-flex h-8 w-16 items-center justify-center rounded-md border px-1.5 text-[10px] font-semibold transition"
+              className="border-line bg-panel/90 hover:bg-panel hover:text-foreground inline-flex h-8 w-16 items-center justify-center rounded-md border px-1.5 text-[10px] font-semibold transition focus:outline-none active:translate-y-px active:scale-95"
             >
               {isDebugTextPaused ? 'Resume' : 'Pause'}
             </button>
