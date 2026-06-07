@@ -206,13 +206,18 @@ function RecordingCapture({ soundCheck }: SoundCheckProps) {
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2">
         {soundCheck.isRecording ? (
-          <Button variant="danger" onClick={soundCheck.stopRecording}>
+          <Button
+            variant="danger"
+            onClick={soundCheck.stopRecording}
+            className="w-40"
+          >
             Stop recording
           </Button>
         ) : (
           <Button
             disabled={soundCheck.appPaused || soundCheck.inputMuted}
             onClick={soundCheck.startRecording}
+            className="w-40"
           >
             Record input
           </Button>

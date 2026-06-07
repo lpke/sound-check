@@ -193,6 +193,7 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
               <div>
                 <Button
                   variant="outputPrimary"
+                  className="w-40"
                   onClick={
                     isToneTestPlaying
                       ? soundCheck.stopPlaybackOutput
