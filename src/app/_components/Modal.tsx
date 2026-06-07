@@ -102,7 +102,7 @@ export function Modal({
     }
 
     shouldRestoreFocusRef.current = false;
-    triggerRef.current?.focus();
+    focusWithoutScroll(triggerRef.current);
   }, [phase]);
 
   useEffect(() => {
@@ -194,9 +194,9 @@ export function Modal({
 
     document.addEventListener('keydown', handleKeyDown);
     if (closeButtonRef.current?.getClientRects().length) {
-      closeButtonRef.current.focus();
+      focusWithoutScroll(closeButtonRef.current);
     } else {
-      panelRef.current?.focus();
+      focusWithoutScroll(panelRef.current);
     }
 
     return () => {
@@ -341,4 +341,8 @@ function canScroll(scrollContainer: HTMLElement | null, deltaY: number) {
   }
 
   return false;
+}
+
+function focusWithoutScroll(element: HTMLElement | null) {
+  element?.focus({ preventScroll: true });
 }
