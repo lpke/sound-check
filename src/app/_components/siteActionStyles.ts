@@ -5,11 +5,13 @@ type SiteActionTone = 'control' | 'danger' | 'default';
 export function siteActionButtonClassName({
   className,
   fontWeight = 'normal',
+  showDesktopShadow = false,
   tone = 'default',
   widthClassName,
 }: {
   className?: string;
   fontWeight?: 'normal' | 'semibold';
+  showDesktopShadow?: boolean;
   tone?: SiteActionTone;
   widthClassName?: string;
 }) {
@@ -22,6 +24,7 @@ export function siteActionButtonClassName({
       : tone === 'danger'
         ? 'border-danger bg-danger hover:bg-danger/90 text-white'
         : 'border-line bg-panel text-foreground hover:bg-panel-soft',
+    showDesktopShadow && 'sm:shadow-[0_2px_8px_rgba(15,23,42,0.16)]',
     className,
   );
 }

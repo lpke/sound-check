@@ -17,6 +17,7 @@ import { siteActionButtonClassName } from './siteActionStyles';
 type DebugModalProps = {
   closeWhen?: boolean;
   onOpen?: () => void;
+  shouldShowShadow: boolean;
   soundCheck: SoundCheckController;
 };
 
@@ -69,7 +70,12 @@ const debugMimeTypes = [
 
 const DEBUG_TEXT_REFRESH_MS = 250;
 
-export function DebugModal({ closeWhen, onOpen, soundCheck }: DebugModalProps) {
+export function DebugModal({
+  closeWhen,
+  onOpen,
+  shouldShowShadow,
+  soundCheck,
+}: DebugModalProps) {
   const [includedSections, setIncludedSections] = useState(
     defaultIncludedSections,
   );
@@ -256,7 +262,10 @@ export function DebugModal({ closeWhen, onOpen, soundCheck }: DebugModalProps) {
       triggerClassName="rounded-lg transition active:translate-y-px active:scale-[0.985] focus:outline-none"
       trigger={
         <span
-          className={siteActionButtonClassName({ className: 'select-none' })}
+          className={siteActionButtonClassName({
+            className: 'select-none',
+            showDesktopShadow: shouldShowShadow,
+          })}
         >
           Debug
         </span>

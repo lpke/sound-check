@@ -22,6 +22,7 @@ export function SectionShell({
 
   return (
     <section
+      data-io-section="true"
       data-io-section-muted={muted ? 'true' : undefined}
       data-help-boundary="true"
       className={joinClasses(

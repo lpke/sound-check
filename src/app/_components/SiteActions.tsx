@@ -6,8 +6,10 @@ import { HelpModeButton, useHelpMode } from './HelpMode';
 import { siteActionButtonClassName } from './siteActionStyles';
 
 export function SiteActions({
+  shouldShowShadow,
   soundCheck,
 }: {
+  shouldShowShadow: boolean;
   soundCheck: SoundCheckController;
 }) {
   const { closeHelpMode, isHelpModeActive, isHelpModeExiting } = useHelpMode();
@@ -15,12 +17,16 @@ export function SiteActions({
 
   return (
     <SiteHeaderArea isSticky={isHelpModeActive}>
-      <div className="flex w-full items-center justify-between gap-2 sm:fixed sm:right-6 sm:bottom-6 sm:z-[110] sm:w-auto sm:justify-end">
+      <div
+        data-site-action-anchor="right"
+        className="flex w-full items-center justify-between gap-2 sm:fixed sm:right-6 sm:bottom-6 sm:z-[110] sm:w-auto sm:justify-end"
+      >
         <button
           type="button"
           onClick={soundCheck.toggleAllAudio}
           className={siteActionButtonClassName({
             fontWeight: 'semibold',
+            showDesktopShadow: shouldShowShadow,
             tone: soundCheck.allAudioStopped ? 'control' : 'default',
             widthClassName: 'w-28',
           })}
@@ -28,9 +34,10 @@ export function SiteActions({
           {soundCheck.allAudioStopped ? 'Resume all' : 'Pause all'}
         </button>
         <div className="flex items-center gap-2">
-          <HelpModeButton />
+          <HelpModeButton showDesktopShadow={shouldShowShadow} />
           <DebugModal
             closeWhen={shouldCloseDebugForHelp}
+            shouldShowShadow={shouldShowShadow}
             soundCheck={soundCheck}
             onOpen={closeHelpMode}
           />

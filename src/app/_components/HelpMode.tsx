@@ -139,7 +139,11 @@ export function useHelpMode() {
   );
 }
 
-export function HelpModeButton() {
+export function HelpModeButton({
+  showDesktopShadow,
+}: {
+  showDesktopShadow: boolean;
+}) {
   const { isHelpModeActive, isHelpModeExiting, toggleHelpMode } = useHelpMode();
   const isHelpModeOpen = isHelpModeActive && !isHelpModeExiting;
 
@@ -150,6 +154,7 @@ export function HelpModeButton() {
       onClick={toggleHelpMode}
       className={siteActionButtonClassName({
         className: isHelpModeActive ? 'relative z-[70]' : undefined,
+        showDesktopShadow,
         tone: isHelpModeOpen ? 'danger' : 'default',
         widthClassName: isHelpModeOpen ? 'w-28' : 'w-20',
       })}

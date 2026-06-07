@@ -3,7 +3,9 @@ import { siteActionButtonClassName } from './siteActionStyles';
 
 export function SiteFooter({
   onRecheckPermission,
+  shouldShowShadow,
 }: {
+  shouldShowShadow?: boolean;
   soundCheck: SoundCheckController;
   onRecheckPermission?: () => void;
 }) {
@@ -12,9 +14,11 @@ export function SiteFooter({
       {onRecheckPermission ? (
         <button
           type="button"
+          data-site-action-anchor="left"
           onClick={onRecheckPermission}
           className={siteActionButtonClassName({
             className: 'sm:fixed sm:bottom-6 sm:left-6 sm:z-[75]',
+            showDesktopShadow: shouldShowShadow,
           })}
         >
           Recheck permissions and refresh devices
