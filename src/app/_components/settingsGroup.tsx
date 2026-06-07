@@ -1,16 +1,20 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { joinClasses } from '@/utils/utils';
 import { HelpTip, useHelpMode } from './HelpMode';
 
 export function SettingsGroup({
   children,
+  className,
   description,
   helpDescription,
+  style,
   title,
 }: {
   children: ReactNode;
+  className?: string;
   description?: ReactNode;
   helpDescription?: string;
+  style?: CSSProperties;
   title?: string;
 }) {
   const { isHelpModeActive, isHelpModeExiting } = useHelpMode();
@@ -19,9 +23,11 @@ export function SettingsGroup({
   const group = (
     <section
       data-help-anchor={hasHelpDescription ? 'true' : undefined}
+      style={style}
       className={joinClasses(
         'border-line bg-panel-soft rounded-lg border p-4 transition-colors duration-200 ease-out',
         isHelpModeOpen && hasHelpDescription && 'border-help-warning/45',
+        className,
       )}
     >
       {title || description ? (

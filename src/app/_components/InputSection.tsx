@@ -1,5 +1,6 @@
+import type { CSSProperties } from 'react';
 import { MAX_MONITOR_DELAY_MS } from '@/utils/types';
-import { formatSeconds } from '@/utils/utils';
+import { clamp, formatSeconds } from '@/utils/utils';
 import type { SoundCheckProps } from './componentTypes';
 import { checkboxClassName } from './controlStyles';
 import { HelpTarget } from './HelpMode';
@@ -198,9 +199,26 @@ function LiveMonitorBlock({ soundCheck }: SoundCheckProps) {
 
 function RecordingCapture({ soundCheck }: SoundCheckProps) {
   const latestRecordedClip = soundCheck.recordedClips.at(-1);
+  const recordingInputLevel = clamp(soundCheck.inputLevel, 0, 1);
+  const recordingHaloLevel = Math.sqrt(recordingInputLevel);
 
   return (
-    <SettingsGroup>
+    <SettingsGroup
+      className={
+        soundCheck.isRecording ? 'recording-capture-card-active' : undefined
+      }
+      style={
+        soundCheck.isRecording
+          ? ({
+              '--recording-border-alpha': 0.42 + recordingHaloLevel * 0.38,
+              '--recording-halo-alpha': 0.08 + recordingHaloLevel * 0.12,
+              '--recording-halo-blur': `${0.28 + recordingHaloLevel * 0.62}rem`,
+              '--recording-halo-size': `${0.1 + recordingHaloLevel * 0.32}rem`,
+              '--recording-inner-alpha': 0.12 + recordingHaloLevel * 0.16,
+            } as CSSProperties)
+          : undefined
+      }
+    >
       <div className="mb-4">
         <h2 className="text-foreground text-sm font-semibold">Record input</h2>
       </div>
@@ -223,7 +241,7 @@ function RecordingCapture({ soundCheck }: SoundCheckProps) {
           </Button>
         )}
 
-        <p className="text-muted font-mono text-xs">
+        <p className="text-muted font-mono text-xl leading-none font-semibold tabular-nums">
           {soundCheck.isRecording
             ? formatSeconds(soundCheck.recordingSeconds)
             : latestRecordedClip
