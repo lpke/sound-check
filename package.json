@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "cert:phone": "mkdir -p certificates && nix-shell -p mkcert --run 'mkcert -cert-file certificates/dev-local.pem -key-file certificates/dev-local-key.pem 192.168.20.18 localhost 127.0.0.1 ::1 && cp \"$(mkcert -CAROOT)/rootCA.pem\" certificates/rootCA.pem'",
-    "cert:phone:serve": "nix-shell -p python3 --run 'python3 -m http.server 8000 --bind 0.0.0.0 --directory certificates'",
+    "cert:phone": "node scripts/generate-phone-cert.mjs",
+    "cert:phone:serve": "node scripts/serve-phone-cert.mjs",
     "dev": "next dev",
     "dev:phone": "next dev -H 0.0.0.0 --experimental-https --experimental-https-cert ./certificates/dev-local.pem --experimental-https-key ./certificates/dev-local-key.pem",
     "build": "next build",
