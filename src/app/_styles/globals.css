@@ -63,12 +63,14 @@ body {
 
 button,
 input,
+textarea,
 select {
   font-family: inherit;
 }
 
 button:disabled,
 input:disabled,
+textarea:disabled,
 select:disabled {
   cursor: not-allowed;
 }
@@ -79,6 +81,12 @@ button:not(:disabled):not([tabindex='-1']),
 }
 
 @media (any-pointer: coarse) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+
   button,
   [role='button'] {
     -webkit-user-select: none;
