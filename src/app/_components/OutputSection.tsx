@@ -128,30 +128,32 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
 
         <SettingsGroup title="Speaker test">
           <div className="grid gap-4">
-            <Field label="Sound">
-              <div className="relative">
-                <select
-                  id="speaker-test-kind"
-                  name="speaker-test-kind"
-                  value={testKind}
-                  onChange={handleSpeakerTestKindChange}
-                  className={joinClasses(
-                    controlClassName('output'),
-                    'appearance-none pr-9',
-                  )}
-                >
-                  {speakerTestOptions.map((option) => (
-                    <option key={option.kind} value={option.kind}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDownIcon
-                  aria-hidden="true"
-                  className="text-muted pointer-events-none absolute top-1/2 right-2.5 h-4 w-4 -translate-y-1/2"
-                />
-              </div>
-            </Field>
+            <HelpTarget>
+              <Field label="Sound">
+                <div className="relative">
+                  <select
+                    id="speaker-test-kind"
+                    name="speaker-test-kind"
+                    value={testKind}
+                    onChange={handleSpeakerTestKindChange}
+                    className={joinClasses(
+                      controlClassName('output'),
+                      'appearance-none pr-9',
+                    )}
+                  >
+                    {speakerTestOptions.map((option) => (
+                      <option key={option.kind} value={option.kind}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDownIcon
+                    aria-hidden="true"
+                    className="text-muted pointer-events-none absolute top-1/2 right-2.5 h-4 w-4 -translate-y-1/2"
+                  />
+                </div>
+              </Field>
+            </HelpTarget>
 
             {needsFrequency ? (
               <RangeWithUnit
@@ -609,44 +611,48 @@ function MusicConfig({
 
   return (
     <div className="grid gap-4">
-      <Field label="Music source">
-        <div className="relative">
-          <select
-            id="speaker-music-source"
-            name="speaker-music-source"
-            value={soundCheck.speakerTestSettings.musicSource}
-            onChange={onMusicSourceChange}
-            className={joinClasses(
-              controlClassName('output'),
-              'appearance-none pr-9',
-            )}
-          >
-            {speakerMusicSources.map((option) => (
-              <option key={option.source} value={option.source}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <ChevronDownIcon
-            aria-hidden="true"
-            className="text-muted pointer-events-none absolute top-1/2 right-2.5 h-4 w-4 -translate-y-1/2"
-          />
-        </div>
-      </Field>
+      <HelpTarget>
+        <Field label="Music source">
+          <div className="relative">
+            <select
+              id="speaker-music-source"
+              name="speaker-music-source"
+              value={soundCheck.speakerTestSettings.musicSource}
+              onChange={onMusicSourceChange}
+              className={joinClasses(
+                controlClassName('output'),
+                'appearance-none pr-9',
+              )}
+            >
+              {speakerMusicSources.map((option) => (
+                <option key={option.source} value={option.source}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDownIcon
+              aria-hidden="true"
+              className="text-muted pointer-events-none absolute top-1/2 right-2.5 h-4 w-4 -translate-y-1/2"
+            />
+          </div>
+        </Field>
+      </HelpTarget>
 
       {soundCheck.speakerTestSettings.musicSource === 'file' ? (
-        <div className="border-line bg-panel flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-foreground truncate text-sm font-semibold">
-            {soundCheck.speakerTestSettings.musicFile?.name ??
-              'No file selected'}
-          </p>
-          <Button
-            variant="outputSecondary"
-            onClick={() => musicFileInputRef.current?.click()}
-          >
-            Choose file
-          </Button>
-        </div>
+        <HelpTarget>
+          <div className="border-line bg-panel flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-foreground truncate text-sm font-semibold">
+              {soundCheck.speakerTestSettings.musicFile?.name ??
+                'No file selected'}
+            </p>
+            <Button
+              variant="outputSecondary"
+              onClick={() => musicFileInputRef.current?.click()}
+            >
+              Choose file
+            </Button>
+          </div>
+        </HelpTarget>
       ) : null}
 
       <HelpTarget
