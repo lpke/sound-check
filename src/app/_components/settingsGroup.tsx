@@ -9,6 +9,7 @@ export function SettingsGroup({
   helpDescription,
   style,
   title,
+  titleAction,
 }: {
   children: ReactNode;
   className?: string;
@@ -16,10 +17,13 @@ export function SettingsGroup({
   helpDescription?: string;
   style?: CSSProperties;
   title?: string;
+  titleAction?: ReactNode;
 }) {
   const { isHelpModeActive, isHelpModeExiting } = useHelpMode();
   const hasHelpDescription = Boolean(helpDescription);
   const isHelpModeOpen = isHelpModeActive && !isHelpModeExiting;
+  const hasHeader = Boolean(title || description || titleAction);
+  const hasTitleRow = Boolean(title || titleAction);
   const group = (
     <section
       data-help-anchor={hasHelpDescription ? 'true' : undefined}
@@ -30,13 +34,29 @@ export function SettingsGroup({
         className,
       )}
     >
-      {title || description ? (
+      {hasHeader ? (
         <div className="mb-4">
-          {title ? (
-            <h2 className="text-foreground text-sm font-semibold">{title}</h2>
+          {hasTitleRow ? (
+            <div className="flex min-w-0 items-center gap-3">
+              {title ? (
+                <h2 className="text-foreground min-w-0 text-sm font-semibold">
+                  {title}
+                </h2>
+              ) : null}
+              {titleAction ? (
+                <div className="ml-auto shrink-0">{titleAction}</div>
+              ) : null}
+            </div>
           ) : null}
           {description ? (
-            <p className="text-muted mt-1 text-xs leading-5">{description}</p>
+            <p
+              className={joinClasses(
+                'text-muted text-xs leading-5',
+                hasTitleRow && 'mt-1',
+              )}
+            >
+              {description}
+            </p>
           ) : null}
         </div>
       ) : null}

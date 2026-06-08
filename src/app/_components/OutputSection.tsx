@@ -232,10 +232,18 @@ function RecordingPlayback({ soundCheck }: SoundCheckProps) {
   const hasInitialClipSnapshotRef = useRef(false);
   const clipAnimationTimersRef = useRef<Set<number>>(new Set());
   const deleteClipTimersRef = useRef<Map<string, number>>(new Map());
+  const deleteAllClipsTimerRef = useRef<number | null>(null);
+  const isDeleteAllButtonHoveredRef = useRef(false);
+  const deleteAllConfirmTimerRef = useRef<number | null>(null);
+  const [deleteAllConfirmingClipIdsKey, setDeleteAllConfirmingClipIdsKey] =
+    useState<string | null>(null);
   const shouldShowHelpDemo =
     isHelpModeActive && soundCheck.recordedClips.length === 0;
   const isRenameHelpActive = isHelpModeActive && !isHelpModeExiting;
   const clipIdsKey = soundCheck.recordedClips.map((clip) => clip.id).join('|');
+  const isDeleteAllConfirming =
+    soundCheck.recordedClips.length > 0 &&
+    deleteAllConfirmingClipIdsKey === clipIdsKey;
 
   useEffect(() => {
     const animationTimers = clipAnimationTimersRef.current;
@@ -289,12 +297,44 @@ function RecordingPlayback({ soundCheck }: SoundCheckProps) {
   useEffect(() => {
     const animationTimers = clipAnimationTimersRef.current;
     const deleteTimers = deleteClipTimersRef.current;
+    const deleteAllClipsTimer = deleteAllClipsTimerRef;
+    const deleteAllConfirmTimer = deleteAllConfirmTimerRef;
 
     return () => {
       animationTimers.forEach((timer) => window.clearTimeout(timer));
       deleteTimers.forEach((timer) => window.clearTimeout(timer));
+
+      if (deleteAllClipsTimer.current !== null) {
+        window.clearTimeout(deleteAllClipsTimer.current);
+      }
+
+      if (deleteAllConfirmTimer.current !== null) {
+        window.clearTimeout(deleteAllConfirmTimer.current);
+      }
     };
   }, []);
+
+  function clearDeleteAllConfirmTimer() {
+    if (deleteAllConfirmTimerRef.current === null) {
+      return;
+    }
+
+    window.clearTimeout(deleteAllConfirmTimerRef.current);
+    deleteAllConfirmTimerRef.current = null;
+  }
+
+  function scheduleDeleteAllConfirmTimeout() {
+    clearDeleteAllConfirmTimer();
+
+    if (isDeleteAllButtonHoveredRef.current) {
+      return;
+    }
+
+    deleteAllConfirmTimerRef.current = window.setTimeout(() => {
+      deleteAllConfirmTimerRef.current = null;
+      setDeleteAllConfirmingClipIdsKey(null);
+    }, 3000);
+  }
 
   function handleDeleteRecordedClip(clipId: string) {
     if (deleteClipTimersRef.current.has(clipId)) {
@@ -318,9 +358,59 @@ function RecordingPlayback({ soundCheck }: SoundCheckProps) {
     deleteClipTimersRef.current.set(clipId, deleteTimer);
   }
 
+  function handleDeleteAllRecordedClips() {
+    if (!isDeleteAllConfirming) {
+      setDeleteAllConfirmingClipIdsKey(clipIdsKey);
+      scheduleDeleteAllConfirmTimeout();
+      return;
+    }
+
+    clearDeleteAllConfirmTimer();
+    deleteClipTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    deleteClipTimersRef.current.clear();
+    if (deleteAllClipsTimerRef.current !== null) {
+      window.clearTimeout(deleteAllClipsTimerRef.current);
+    }
+
+    const clipIds = soundCheck.recordedClips.map((clip) => clip.id);
+
+    setEnteringClipIds(new Set());
+    setExitingClipIds(new Set(clipIds));
+    setDeleteAllConfirmingClipIdsKey(null);
+
+    deleteAllClipsTimerRef.current = window.setTimeout(() => {
+      deleteAllClipsTimerRef.current = null;
+      soundCheck.deleteAllRecordedClips();
+      setExitingClipIds(new Set());
+    }, 220);
+  }
+
+  function handleDeleteAllPointerEnter() {
+    isDeleteAllButtonHoveredRef.current = true;
+    clearDeleteAllConfirmTimer();
+  }
+
+  function handleDeleteAllPointerLeave() {
+    isDeleteAllButtonHoveredRef.current = false;
+
+    if (isDeleteAllConfirming) {
+      scheduleDeleteAllConfirmTimeout();
+    }
+  }
+
+  const deleteAllAction =
+    soundCheck.recordedClips.length > 0 ? (
+      <DeleteAllRecordingsButton
+        isConfirming={isDeleteAllConfirming}
+        onClick={handleDeleteAllRecordedClips}
+        onPointerEnter={handleDeleteAllPointerEnter}
+        onPointerLeave={handleDeleteAllPointerLeave}
+      />
+    ) : null;
+
   return (
     <HelpTarget activeClassName="z-50" className="block">
-      <SettingsGroup title="Recorded playback">
+      <SettingsGroup title="Recorded playback" titleAction={deleteAllAction}>
         <div className="grid gap-2">
           {shouldShowHelpDemo ? (
             <div
@@ -450,6 +540,48 @@ function RecordingPlayback({ soundCheck }: SoundCheckProps) {
         </div>
       </SettingsGroup>
     </HelpTarget>
+  );
+}
+
+function DeleteAllRecordingsButton({
+  isConfirming,
+  onClick,
+  onPointerEnter,
+  onPointerLeave,
+}: {
+  isConfirming: boolean;
+  onClick: () => void;
+  onPointerEnter: () => void;
+  onPointerLeave: () => void;
+}) {
+  const label = isConfirming
+    ? 'Confirm delete all recordings'
+    : 'Delete all recordings';
+
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      onPointerEnter={onPointerEnter}
+      onPointerLeave={onPointerLeave}
+      className={joinClasses(
+        'inline-flex h-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-transparent text-sm font-semibold whitespace-nowrap transition-[width,background-color,color,scale,translate] duration-200 ease-out select-none focus:outline-none active:translate-y-px active:scale-95',
+        isConfirming
+          ? 'text-danger hover:bg-danger/8 bg-danger/8 hover:text-danger w-[5.75rem] px-2'
+          : 'text-muted hover:bg-danger/8 hover:text-danger w-[5.75rem] pr-2 pl-3.5',
+      )}
+    >
+      {isConfirming ? (
+        <span className="px-1">Confirm?</span>
+      ) : (
+        <span className="inline-flex items-center gap-1.5">
+          <span>Clear</span>
+          <TrashIcon aria-hidden="true" className="h-5 w-5" />
+        </span>
+      )}
+    </button>
   );
 }
 
