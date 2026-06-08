@@ -334,43 +334,40 @@ export function RangeWithUnit({
   }
 
   const rangeField = (
-    <div
-      className={joinClasses(
-        'relative grid w-full rounded-lg border transition-colors',
-        isNumberEditing
-          ? accent === 'input'
-            ? 'border-input'
-            : 'border-output'
-          : 'border-line',
-      )}
-      style={{
-        backgroundColor: 'var(--color-panel)',
-      }}
-    >
-      <div className="relative">
-        <input
-          ref={numberInputRef}
-          id={`${idBase}-number`}
-          name={`${idBase}-number`}
-          aria-label={ariaLabel}
-          type="number"
-          min={min}
-          max={max}
-          step={step}
-          value={value}
-          onChange={(event) => onChange(Number(event.target.value))}
-          onFocus={() => setIsNumberEditing(true)}
-          onBlur={() => setIsNumberEditing(false)}
-          className={joinClasses(numberInputClassName(accent), 'pr-10')}
-        />
-        <span className="text-muted pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm">
-          {unit}
-        </span>
-      </div>
-      <HelpTarget
-        className="block rounded-b-lg"
-        highlightClassName="rounded-b-lg"
+    <HelpTarget className="block rounded-lg">
+      <div
+        className={joinClasses(
+          'relative grid w-full rounded-lg border transition-colors',
+          isNumberEditing
+            ? accent === 'input'
+              ? 'border-input'
+              : 'border-output'
+            : 'border-line',
+        )}
+        style={{
+          backgroundColor: 'var(--color-panel)',
+        }}
       >
+        <div className="relative">
+          <input
+            ref={numberInputRef}
+            id={`${idBase}-number`}
+            name={`${idBase}-number`}
+            aria-label={ariaLabel}
+            type="number"
+            min={min}
+            max={max}
+            step={step}
+            value={value}
+            onChange={(event) => onChange(Number(event.target.value))}
+            onFocus={() => setIsNumberEditing(true)}
+            onBlur={() => setIsNumberEditing(false)}
+            className={joinClasses(numberInputClassName(accent), 'pr-10')}
+          />
+          <span className="text-muted pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm">
+            {unit}
+          </span>
+        </div>
         <div
           className="relative touch-pan-y select-none"
           onPointerCancel={handleRangePointerCancel}
@@ -406,8 +403,8 @@ export function RangeWithUnit({
             className="absolute inset-x-0 -top-2 -bottom-2 z-20 cursor-ew-resize select-none"
           />
         </div>
-      </HelpTarget>
-    </div>
+      </div>
+    </HelpTarget>
   );
   const rangeLabel = (
     <HelpLabel
