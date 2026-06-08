@@ -80,6 +80,7 @@ export function SectionHeader({
   selectedDeviceId,
   selectedDeviceName,
   selectLabel,
+  isRecording,
   signalLevel,
   signalState,
   toggleLabel,
@@ -97,6 +98,7 @@ export function SectionHeader({
   selectedDeviceId: string;
   selectedDeviceName: string;
   selectLabel: string;
+  isRecording?: boolean;
   signalLevel: number;
   signalState: SectionSignalState;
   toggleLabel: string;
@@ -216,7 +218,11 @@ export function SectionHeader({
           icon={RefreshIcon}
         />
       </HeaderHelpTarget>
-      <SignalDot level={signalLevel} state={signalState} />
+      <SignalDot
+        isRecording={isRecording}
+        level={signalLevel}
+        state={signalState}
+      />
     </div>
   );
 }
@@ -271,17 +277,25 @@ function HeaderHelpTarget({
 }
 
 function SignalDot({
+  isRecording,
   level,
   state,
 }: {
+  isRecording?: boolean;
   level: number;
   state: SectionSignalState;
 }) {
-  const label =
-    state === 'off' ? 'Off' : state === 'ready' ? 'Ready' : 'Signal detected';
+  const label = isRecording
+    ? 'Recording'
+    : state === 'off'
+      ? 'Off'
+      : state === 'ready'
+        ? 'Ready'
+        : 'Signal detected';
   const boundedLevel = clamp(level, 0, 1);
   const activeGlowOpacity = 0.14 + boundedLevel * 0.22;
   const activeGlowScale = 1 + boundedLevel * 0.65;
+  const isRecordingActive = isRecording === true;
 
   return (
     <span
@@ -289,17 +303,24 @@ function SignalDot({
       title={label}
       className={joinClasses(
         'relative flex h-5 w-5 items-center justify-center rounded-full',
-        state !== 'off' && 'drop-shadow-[0_1px_3px_rgba(36,100,194,0.22)]',
+        (state !== 'off' || isRecordingActive) &&
+          (isRecordingActive
+            ? 'drop-shadow-[0_1px_3px_rgba(180,35,24,0.22)]'
+            : 'drop-shadow-[0_1px_3px_rgba(36,100,194,0.22)]'),
       )}
     >
       <span
         aria-hidden="true"
         className={joinClasses(
           'absolute aspect-square rounded-full transition-[opacity,transform] duration-150 ease-out',
-          state === 'off' && 'bg-muted/10 h-4 w-4',
-          state === 'ready' && 'bg-status-ready/12 h-4 w-4',
+          isRecordingActive && state !== 'active' && 'h-4 w-4 bg-[#b42318]/12',
+          !isRecordingActive && state === 'off' && 'bg-muted/10 h-4 w-4',
+          !isRecordingActive &&
+            state === 'ready' &&
+            'bg-status-ready/12 h-4 w-4',
           state === 'active' &&
-            'bg-status-active h-5 w-5 origin-center transform-gpu',
+            (isRecordingActive ? 'bg-[#b42318]' : 'bg-status-active'),
+          state === 'active' && 'h-5 w-5 origin-center transform-gpu',
         )}
         style={
           state === 'active'
@@ -314,10 +335,14 @@ function SignalDot({
         aria-hidden="true"
         className={joinClasses(
           'relative h-3.5 w-3.5 rounded-full border transition-colors duration-150',
-          state === 'off' && 'border-line bg-muted/35',
-          state === 'ready' &&
+          isRecordingActive &&
+            'border-[#b42318] bg-[#b42318] shadow-[inset_0_1px_0_rgba(255,255,255,0.5),0_0_10px_rgba(180,35,24,0.34)]',
+          !isRecordingActive && state === 'off' && 'border-line bg-muted/35',
+          !isRecordingActive &&
+            state === 'ready' &&
             'border-status-ready/80 bg-status-ready shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_0_0_3px_rgba(76,121,170,0.12)]',
-          state === 'active' &&
+          !isRecordingActive &&
+            state === 'active' &&
             'border-status-active bg-status-active shadow-[inset_0_1px_0_rgba(255,255,255,0.5),0_0_10px_rgba(36,100,194,0.34)]',
         )}
       />

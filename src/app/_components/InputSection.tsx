@@ -29,6 +29,7 @@ export function InputSection({ soundCheck }: SoundCheckProps) {
           selectedDeviceId={soundCheck.selectedInputId}
           selectedDeviceName={soundCheck.selectedInputName}
           selectLabel="Microphone device"
+          isRecording={soundCheck.isRecording}
           signalLevel={soundCheck.inputLevel}
           signalState={soundCheck.inputSignalState}
           toggleLabel={isInputStopped ? 'Unmute microphone' : 'Mute microphone'}
@@ -230,9 +231,7 @@ function RecordingCapture({ soundCheck }: SoundCheckProps) {
           isHelpModeExiting
             ? '[transition-timing-function:var(--help-motion-exit-ease)]'
             : '[transition-timing-function:var(--help-motion-enter-ease)]',
-          isHelpModeOpen
-            ? 'grid-rows-[2.5rem_auto]'
-            : 'grid-rows-[0rem_auto]',
+          isHelpModeOpen ? 'grid-rows-[2.5rem_auto]' : 'grid-rows-[0rem_auto]',
         )}
       >
         <div aria-hidden="true" className="overflow-hidden" />
