@@ -10,19 +10,20 @@ import type { SpeakerMusicSource, SpeakerTestKind } from '@/utils/types';
 import { formatSeconds, joinClasses } from '@/utils/utils';
 import type { SoundCheckProps } from './componentTypes';
 import { controlClassName } from './controlStyles';
-import { HelpTarget, HelpTip, useHelpMode } from './HelpMode';
+import { useHelpMode } from '@/hooks/useHelpMode';
+import { HelpTarget, HelpTip } from './HelpMode';
 import {
   BookmarkIcon,
   ChevronDownIcon,
   SpeakerIcon,
   TrashIcon,
   XIcon,
-} from './icons';
-import { AudioPlaybackControls, PlaybackIconButton } from './playbackControls';
+} from './Icons';
+import { AudioPlaybackControls, PlaybackIconButton } from './PlaybackControls';
 import { RangeWithUnit } from './RangeWithUnit';
-import { SectionHeader, SectionShell, StickyIoChrome } from './sectionChrome';
-import { SettingsGroup } from './settingsGroup';
-import { Button, Field, LevelMeter } from './ui';
+import { SectionHeader, SectionShell, StickyIoChrome } from './SectionChrome';
+import { SettingsGroup } from './SettingsGroup';
+import { Button, Field, LevelMeter } from './UI';
 
 const speakerTestOptions: { kind: SpeakerTestKind; label: string }[] = [
   { kind: 'tone', label: 'Steady tone' },

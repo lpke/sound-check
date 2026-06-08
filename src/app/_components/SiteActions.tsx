@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
-import type { SoundCheckController } from '@/utils/useSoundCheck';
+import type { SoundCheckController } from '@/hooks/useSoundCheck';
 import { joinClasses } from '@/utils/utils';
 import { DebugModal } from './DebugModal';
-import { HelpModeButton, useHelpMode } from './HelpMode';
+import { useHelpMode } from '@/hooks/useHelpMode';
+import { HelpModeButton } from './HelpMode';
 import { siteActionButtonClassName } from './siteActionStyles';
 
 export function SiteActions({

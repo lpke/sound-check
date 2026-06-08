@@ -1,4 +1,4 @@
-import type { SoundCheckController } from '@/utils/useSoundCheck';
+import type { SoundCheckController } from '@/hooks/useSoundCheck';
 import { siteActionButtonClassName } from './siteActionStyles';
 
 export function SiteFooter({

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { clamp, formatSeconds, joinClasses } from '@/utils/utils';
 import { rangeClassName } from './controlStyles';
-import { PauseIcon, PlayIcon, SpinnerIcon } from './icons';
+import { PauseIcon, PlayIcon, SpinnerIcon } from './Icons';
 
 export function PlaybackIconButton({
   children,

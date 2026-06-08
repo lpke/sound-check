@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { joinClasses } from '@/utils/utils';
-import { HelpTip, useHelpMode } from './HelpMode';
+import { useHelpMode } from '@/hooks/useHelpMode';
+import { HelpTip } from './HelpMode';
 
 export function SettingsGroup({
   children,

@@ -1,9 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getPreferredMimeType } from './audio';
-import type { RecordedClip } from './types';
-import { toErrorMessage } from './utils';
+import { getPreferredMimeType } from '@/utils/audio';
+import type { RecordedClip } from '@/utils/types';
+import { toErrorMessage } from '@/utils/utils';
 
 export function useRecorder({
   ensureInputStream,

@@ -1,23 +1,16 @@
 import {
-  createContext,
   useCallback,
   useEffect,
-  useContext,
   useMemo,
   useRef,
   useState,
   type CSSProperties,
   type ReactNode,
 } from 'react';
+import { useHelpMode } from '@/hooks/useHelpMode';
+import { HelpModeContext } from '@/utils/helpModeContext';
 import { joinClasses } from '@/utils/utils';
 import { siteActionButtonClassName } from './siteActionStyles';
-
-type HelpModeContextValue = {
-  closeHelpMode: () => void;
-  isHelpModeActive: boolean;
-  isHelpModeExiting: boolean;
-  toggleHelpMode: () => void;
-};
 
 export type HelpTipPlacement =
   | 'bottom'
@@ -35,7 +28,6 @@ export type HelpTipLayout = 'flow' | 'overlay';
 export type HelpTipStyle = CSSProperties &
   Partial<Record<`--${string}`, string | number>>;
 
-const HelpModeContext = createContext<HelpModeContextValue | null>(null);
 const HELP_MODE_EXIT_MS = 220;
 const HELP_TARGET_SELECTOR = '[data-help-target="true"]';
 
@@ -125,17 +117,6 @@ export function HelpModeProvider({ children }: { children: ReactNode }) {
         />
       ) : null}
     </HelpModeContext.Provider>
-  );
-}
-
-export function useHelpMode() {
-  return (
-    useContext(HelpModeContext) ?? {
-      closeHelpMode: () => undefined,
-      isHelpModeActive: false,
-      isHelpModeExiting: false,
-      toggleHelpMode: () => undefined,
-    }
   );
 }
 

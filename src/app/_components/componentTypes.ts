@@ -1,5 +1,5 @@
 import type { ComponentType, SVGProps } from 'react';
-import type { SoundCheckController } from '@/utils/useSoundCheck';
+import type { SoundCheckController } from '@/hooks/useSoundCheck';
 
 export type SoundCheckProps = {
   soundCheck: SoundCheckController;

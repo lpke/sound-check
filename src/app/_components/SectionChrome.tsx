@@ -2,14 +2,10 @@ import { useState, type ChangeEvent, type ReactNode } from 'react';
 import { getDeviceLabel } from '@/utils/devices';
 import type { AudioDevice, SectionSignalState } from '@/utils/types';
 import { clamp, joinClasses } from '@/utils/utils';
+import { useHelpMode } from '@/hooks/useHelpMode';
 import type { IconComponent, SectionAccent } from './componentTypes';
-import {
-  HelpTarget,
-  HelpTip,
-  useHelpMode,
-  type HelpTipPlacement,
-} from './HelpMode';
-import { ChevronDownIcon, RefreshIcon } from './icons';
+import { HelpTarget, HelpTip, type HelpTipPlacement } from './HelpMode';
+import { ChevronDownIcon, RefreshIcon } from './Icons';
 
 export function SectionShell({
   children,

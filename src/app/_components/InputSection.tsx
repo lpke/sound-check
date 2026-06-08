@@ -3,12 +3,13 @@ import { MAX_MONITOR_DELAY_MS } from '@/utils/types';
 import { clamp, formatSeconds, joinClasses } from '@/utils/utils';
 import type { SoundCheckProps } from './componentTypes';
 import { checkboxClassName } from './controlStyles';
-import { HelpTarget, HelpTip, useHelpMode } from './HelpMode';
-import { MicrophoneIcon } from './icons';
+import { useHelpMode } from '@/hooks/useHelpMode';
+import { HelpTarget, HelpTip } from './HelpMode';
+import { MicrophoneIcon } from './Icons';
 import { RangeWithUnit } from './RangeWithUnit';
-import { SectionHeader, SectionShell, StickyIoChrome } from './sectionChrome';
-import { SettingsGroup } from './settingsGroup';
-import { Button, LevelMeter } from './ui';
+import { SectionHeader, SectionShell, StickyIoChrome } from './SectionChrome';
+import { SettingsGroup } from './SettingsGroup';
+import { Button, LevelMeter } from './UI';
 
 export function InputSection({ soundCheck }: SoundCheckProps) {
   const isInputStopped = soundCheck.appPaused || soundCheck.inputMuted;

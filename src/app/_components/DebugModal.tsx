@@ -7,7 +7,7 @@ import {
   type ChangeEvent,
   type SVGProps,
 } from 'react';
-import type { SoundCheckController } from '@/utils/useSoundCheck';
+import type { SoundCheckController } from '@/hooks/useSoundCheck';
 import { getDeviceLabel } from '@/utils/devices';
 import { joinClasses } from '@/utils/utils';
 import { Modal } from './Modal';

@@ -1,4 +1,4 @@
-import { Panel } from './ui';
+import { Panel } from './UI';
 
 export function UnsupportedPanel() {
   return (

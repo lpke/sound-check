@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { clamp, joinClasses } from '@/utils/utils';
-import { HelpLabel, HelpTarget, useHelpMode } from './HelpMode';
+import { useHelpMode } from '@/hooks/useHelpMode';
+import { HelpLabel, HelpTarget } from './HelpMode';
 
 export function Panel({
   children,

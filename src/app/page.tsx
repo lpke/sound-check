@@ -6,8 +6,8 @@ import { OutputSection } from '@/components/OutputSection';
 import { SiteActions } from '@/components/SiteActions';
 import { SiteFooter } from '@/components/SiteFooter';
 import { UnsupportedPanel } from '@/components/UnsupportedPanel';
-import { useSiteActionShadow } from '@/components/useSiteActionShadow';
-import { useSoundCheck } from '@/utils/useSoundCheck';
+import { useSiteActionShadow } from '@/hooks/useSiteActionShadow';
+import { useSoundCheck } from '@/hooks/useSoundCheck';
 
 export default function HomePage() {
   return (
