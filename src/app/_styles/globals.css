@@ -40,6 +40,9 @@
 }
 
 :root {
+  --help-motion-duration: 220ms;
+  --help-motion-enter-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --help-motion-exit-ease: cubic-bezier(0.4, 0, 1, 1);
   color-scheme: light;
 }
 
@@ -293,7 +296,8 @@ button:not(:disabled):not([tabindex='-1']),
 }
 
 .help-tip-bubble {
-  animation: help-tip-pop 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: help-tip-pop var(--help-motion-duration)
+    var(--help-motion-enter-ease) both;
   border-color: var(--color-help-warning);
   background-color: var(--color-help-warning-soft);
   color: var(--color-help-warning-text);
@@ -309,7 +313,7 @@ button:not(:disabled):not([tabindex='-1']),
   content: '';
   opacity: 0;
   pointer-events: none;
-  transition: opacity 200ms ease-out;
+  transition: opacity var(--help-motion-duration) var(--help-motion-enter-ease);
 }
 
 [data-io-section-muted='true']
@@ -331,12 +335,13 @@ button:not(:disabled):not([tabindex='-1']),
   display: inline-flex;
   align-items: center;
   gap: 0.75rem;
-  transition: gap 180ms ease;
+  transition: gap var(--help-motion-duration) var(--help-motion-enter-ease);
 }
 
 [data-help-flow='left'][data-help-flow-exiting='true'],
 [data-help-flow='right'][data-help-flow-exiting='true'] {
   gap: 0;
+  transition-timing-function: var(--help-motion-exit-ease);
 }
 
 [data-help-flow='top'] > :not([data-help-tip-shell='true']),
@@ -370,15 +375,16 @@ button:not(:disabled):not([tabindex='-1']),
   --help-tip-margin-bottom: 0rem;
   --help-tip-margin-left: 0rem;
   transition:
-    max-height 180ms ease,
-    max-width 180ms ease,
-    margin 180ms ease,
-    opacity 160ms ease;
+    max-height var(--help-motion-duration) var(--help-motion-enter-ease),
+    max-width var(--help-motion-duration) var(--help-motion-enter-ease),
+    margin var(--help-motion-duration) var(--help-motion-enter-ease),
+    opacity var(--help-motion-duration) var(--help-motion-enter-ease);
   will-change: max-height, max-width, margin, opacity;
 }
 
 [data-help-layout='flow'][data-help-tip-shell='true'] {
-  animation: help-tip-shell-enter 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: help-tip-shell-enter var(--help-motion-duration)
+    var(--help-motion-enter-ease) both;
 }
 
 [data-help-layout='flow'][data-help-placement='top'][data-help-tip-shell='true'] {
@@ -402,7 +408,8 @@ button:not(:disabled):not([tabindex='-1']),
 }
 
 [data-help-layout='overlay'][data-help-tip-shell='true'] {
-  animation: help-tip-overlay-enter 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: help-tip-overlay-enter var(--help-motion-duration)
+    var(--help-motion-enter-ease) both;
   position: absolute;
 }
 
@@ -461,16 +468,19 @@ button:not(:disabled):not([tabindex='-1']),
 }
 
 [data-help-layout='flow'][data-help-tip-shell='true'][data-help-exiting='true'] {
-  animation: help-tip-flow-exit 200ms cubic-bezier(0.4, 0, 1, 1) both;
+  animation: help-tip-flow-exit var(--help-motion-duration)
+    var(--help-motion-exit-ease) both;
   overflow: hidden;
 }
 
 [data-help-layout='overlay'][data-help-tip-shell='true'][data-help-exiting='true'] {
-  animation: help-tip-overlay-exit 180ms ease-in both;
+  animation: help-tip-overlay-exit var(--help-motion-duration)
+    var(--help-motion-exit-ease) both;
 }
 
 [data-help-tip-shell='true'] .help-tip-arrow {
-  animation: help-tip-arrow-enter 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: help-tip-arrow-enter var(--help-motion-duration)
+    var(--help-motion-enter-ease) both;
   position: absolute;
   width: 0.75rem;
   height: 0.75rem;
@@ -479,13 +489,14 @@ button:not(:disabled):not([tabindex='-1']),
   border: 0.5px solid var(--color-help-warning);
   transform: rotate(45deg);
   transition:
-    opacity 160ms ease,
-    transform 180ms ease;
+    opacity var(--help-motion-duration) var(--help-motion-enter-ease),
+    transform var(--help-motion-duration) var(--help-motion-enter-ease);
   pointer-events: none;
 }
 
 [data-help-tip-shell='true'][data-help-exiting='true'] .help-tip-arrow {
-  animation: help-tip-arrow-exit 160ms ease-in both;
+  animation: help-tip-arrow-exit var(--help-motion-duration)
+    var(--help-motion-exit-ease) both;
 }
 
 [data-help-placement='top'] .help-tip-arrow {

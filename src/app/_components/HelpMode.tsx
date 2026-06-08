@@ -36,7 +36,7 @@ export type HelpTipStyle = CSSProperties &
   Partial<Record<`--${string}`, string | number>>;
 
 const HelpModeContext = createContext<HelpModeContextValue | null>(null);
-const HELP_MODE_EXIT_MS = 240;
+const HELP_MODE_EXIT_MS = 220;
 const HELP_TARGET_SELECTOR = '[data-help-target="true"]';
 
 function isPointerOverHelpTarget(event: { clientX: number; clientY: number }) {
@@ -112,8 +112,8 @@ export function HelpModeProvider({ children }: { children: ReactNode }) {
           className={joinClasses(
             'fixed inset-0 z-40 cursor-default',
             isHelpModeExiting
-              ? 'animate-[help-fade-out_160ms_ease-in_both]'
-              : 'animate-[help-fade-in_180ms_ease-out_both]',
+              ? 'animate-[help-fade-out_var(--help-motion-duration)_var(--help-motion-exit-ease)_both]'
+              : 'animate-[help-fade-in_var(--help-motion-duration)_var(--help-motion-enter-ease)_both]',
           )}
           onClick={(event) => {
             if (isPointerOverHelpTarget(event)) {
@@ -334,7 +334,7 @@ export function HelpTarget({
           joinClasses(
             'help-target-shell',
             'help-highlight-zone',
-            'animate-[help-highlight-in_180ms_ease-out_both]',
+            'animate-[help-highlight-in_var(--help-motion-duration)_var(--help-motion-enter-ease)_both]',
             activeClassName,
             highlightClassName,
           ),

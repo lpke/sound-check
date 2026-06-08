@@ -1,9 +1,9 @@
 import type { CSSProperties } from 'react';
 import { MAX_MONITOR_DELAY_MS } from '@/utils/types';
-import { clamp, formatSeconds } from '@/utils/utils';
+import { clamp, formatSeconds, joinClasses } from '@/utils/utils';
 import type { SoundCheckProps } from './componentTypes';
 import { checkboxClassName } from './controlStyles';
-import { HelpTarget } from './HelpMode';
+import { HelpTarget, HelpTip, useHelpMode } from './HelpMode';
 import { MicrophoneIcon } from './icons';
 import { RangeWithUnit } from './RangeWithUnit';
 import { SectionHeader, SectionShell, StickyIoChrome } from './sectionChrome';
@@ -198,9 +198,11 @@ function LiveMonitorBlock({ soundCheck }: SoundCheckProps) {
 }
 
 function RecordingCapture({ soundCheck }: SoundCheckProps) {
+  const { isHelpModeActive, isHelpModeExiting } = useHelpMode();
   const latestRecordedClip = soundCheck.recordedClips.at(-1);
   const recordingInputLevel = clamp(soundCheck.inputLevel, 0, 1);
   const recordingHaloLevel = Math.sqrt(recordingInputLevel);
+  const isHelpModeOpen = isHelpModeActive && !isHelpModeExiting;
 
   return (
     <SettingsGroup
@@ -222,32 +224,52 @@ function RecordingCapture({ soundCheck }: SoundCheckProps) {
       <div className="mb-4">
         <h2 className="text-foreground text-sm font-semibold">Record input</h2>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        {soundCheck.isRecording ? (
-          <Button
-            variant="danger"
-            onClick={soundCheck.stopRecording}
-            className="w-40"
-          >
-            Stop recording
-          </Button>
-        ) : (
-          <Button
-            disabled={soundCheck.appPaused || soundCheck.inputMuted}
-            onClick={soundCheck.startRecording}
-            className="w-40"
-          >
-            Record input
-          </Button>
+      <div
+        className={joinClasses(
+          'grid transition-[grid-template-rows] [transition-duration:var(--help-motion-duration)]',
+          isHelpModeExiting
+            ? '[transition-timing-function:var(--help-motion-exit-ease)]'
+            : '[transition-timing-function:var(--help-motion-enter-ease)]',
+          isHelpModeOpen
+            ? 'grid-rows-[2.5rem_auto]'
+            : 'grid-rows-[0rem_auto]',
         )}
+      >
+        <div aria-hidden="true" className="overflow-hidden" />
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <HelpTip
+            label="Can record multiple clips"
+            layout="overlay"
+            placement="top"
+            className="w-40"
+          >
+            {soundCheck.isRecording ? (
+              <Button
+                variant="danger"
+                onClick={soundCheck.stopRecording}
+                className="w-full"
+              >
+                Stop recording
+              </Button>
+            ) : (
+              <Button
+                disabled={soundCheck.appPaused || soundCheck.inputMuted}
+                onClick={soundCheck.startRecording}
+                className="w-full"
+              >
+                Record input
+              </Button>
+            )}
+          </HelpTip>
 
-        <p className="text-muted font-mono text-xl leading-none font-semibold tabular-nums">
-          {soundCheck.isRecording
-            ? formatSeconds(soundCheck.recordingSeconds)
-            : latestRecordedClip
-              ? formatSeconds(latestRecordedClip.durationSeconds)
-              : '00:00.0'}
-        </p>
+          <p className="text-muted font-mono text-xl leading-none font-semibold tabular-nums">
+            {soundCheck.isRecording
+              ? formatSeconds(soundCheck.recordingSeconds)
+              : latestRecordedClip
+                ? formatSeconds(latestRecordedClip.durationSeconds)
+                : '00:00.0'}
+          </p>
+        </div>
       </div>
     </SettingsGroup>
   );

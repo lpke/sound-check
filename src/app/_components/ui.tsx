@@ -332,10 +332,13 @@ export function LevelMeter({
         <span
           aria-hidden="true"
           className={joinClasses(
-            'pointer-events-none block transition-[height] ease-out',
+            'pointer-events-none block transition-[height] [transition-duration:var(--help-motion-duration)]',
+            isHelpModeExiting
+              ? '[transition-timing-function:var(--help-motion-exit-ease)]'
+              : '[transition-timing-function:var(--help-motion-enter-ease)]',
             shouldPadVisualizerHelp && !isSpectrumVisible
-              ? 'h-8 [transition-delay:0ms] duration-300'
-              : 'h-0 [transition-delay:0ms] duration-300',
+              ? 'h-8 [transition-delay:0ms]'
+              : 'h-0 [transition-delay:0ms]',
           )}
         />
       ) : null}

@@ -652,7 +652,10 @@ function MusicConfig({
       <HelpTarget
         activeClassName="z-50"
         className={joinClasses(
-          'relative rounded-lg transition-[margin] duration-200 ease-out',
+          'relative rounded-lg transition-[margin] [transition-duration:var(--help-motion-duration)]',
+          isHelpModeExiting
+            ? '[transition-timing-function:var(--help-motion-exit-ease)]'
+            : '[transition-timing-function:var(--help-motion-enter-ease)]',
           isHelpModeOpen && visibleMarks.length > 0 && 'mb-10',
         )}
       >
