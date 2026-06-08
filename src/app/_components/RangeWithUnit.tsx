@@ -1,15 +1,34 @@
-import { useRef, useState, type PointerEvent } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent,
+  type PointerEvent,
+} from 'react';
 import { clamp, joinClasses } from '@/utils/utils';
 import type { SectionAccent } from './componentTypes';
 import { numberInputClassName } from './controlStyles';
 import { HelpLabel, HelpTarget } from './HelpMode';
-import { Field } from './ui';
 
 const LOG_SCALE_POWER = 1.2;
+const TOUCH_DRAG_LOCK_THRESHOLD_PX = 8;
+
+type RangeDragState =
+  | {
+      pointerId: number;
+      startX: number;
+      startY: number;
+      mode: 'pending' | 'horizontal';
+    }
+  | {
+      pointerId: number;
+      mode: 'vertical';
+    };
 
 function rangeBarClassName() {
   return joinClasses(
     'relative z-10 block h-3 w-full cursor-ew-resize rounded-b-none rounded-t-none border-0 bg-transparent outline-none appearance-none',
+    'pointer-events-none',
     '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-0 [&::-webkit-slider-thumb]:w-0 [&::-webkit-slider-thumb]:m-0 [&::-webkit-slider-thumb]:border-0 [&::-webkit-slider-thumb]:bg-transparent',
     '[&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:h-0 [&::-moz-range-thumb]:w-0 [&::-moz-range-thumb]:m-0 [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-transparent',
     '[&::-webkit-slider-runnable-track]:h-3 [&::-webkit-slider-runnable-track]:rounded-none [&::-webkit-slider-runnable-track]:bg-transparent',
@@ -128,8 +147,11 @@ export function RangeWithUnit({
       : clamp(((value - min) / (max - min)) * 100, 0, 100);
   const fillColor = accent === 'input' ? '#2f8f4e' : '#2f70d0';
   const [isNumberEditing, setIsNumberEditing] = useState(false);
-  const activeRangePointerIdRef = useRef<number | null>(null);
+  const rangeDragStateRef = useRef<RangeDragState | null>(null);
   const rangeInputRef = useRef<HTMLInputElement | null>(null);
+  const numberInputRef = useRef<HTMLInputElement | null>(null);
+  const shouldRestoreNumberFocusRef = useRef(false);
+  const previousDocumentCursorRef = useRef<string | null>(null);
 
   function commitSliderValue(rawValue: number) {
     onChange(
@@ -159,19 +181,107 @@ export function RangeWithUnit({
     );
   }
 
-  function handleRangePointerDown(event: PointerEvent<HTMLDivElement>) {
-    if (event.pointerType !== 'touch') {
+  function restoreNumberFocus() {
+    if (!shouldRestoreNumberFocusRef.current) {
       return;
     }
 
-    activeRangePointerIdRef.current = event.pointerId;
+    window.setTimeout(() => {
+      numberInputRef.current?.focus({ preventScroll: true });
+    }, 0);
+  }
+
+  function startDocumentResizeCursor() {
+    if (previousDocumentCursorRef.current !== null) {
+      return;
+    }
+
+    previousDocumentCursorRef.current = document.documentElement.style.cursor;
+    document.documentElement.style.cursor = 'ew-resize';
+  }
+
+  function stopDocumentResizeCursor() {
+    if (previousDocumentCursorRef.current === null) {
+      return;
+    }
+
+    document.documentElement.style.cursor = previousDocumentCursorRef.current;
+    previousDocumentCursorRef.current = null;
+  }
+
+  useEffect(() => {
+    return () => {
+      stopDocumentResizeCursor();
+    };
+  }, []);
+
+  function handleRangePointerDown(event: PointerEvent<HTMLDivElement>) {
+    shouldRestoreNumberFocusRef.current =
+      document.activeElement === numberInputRef.current;
+
+    if (event.pointerType !== 'touch') {
+      rangeDragStateRef.current = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        mode: 'horizontal',
+      };
+      event.currentTarget.setPointerCapture(event.pointerId);
+      startDocumentResizeCursor();
+      updateRangeFromPointer(event);
+      event.preventDefault();
+
+      return;
+    }
+
+    rangeDragStateRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      mode: 'pending',
+    };
     event.currentTarget.setPointerCapture(event.pointerId);
-    updateRangeFromPointer(event);
     event.preventDefault();
   }
 
   function handleRangePointerMove(event: PointerEvent<HTMLDivElement>) {
-    if (activeRangePointerIdRef.current !== event.pointerId) {
+    const dragState = rangeDragStateRef.current;
+
+    if (!dragState || dragState.pointerId !== event.pointerId) {
+      return;
+    }
+
+    if (dragState.mode === 'pending') {
+      const deltaX = event.clientX - dragState.startX;
+      const deltaY = event.clientY - dragState.startY;
+      const absDeltaX = Math.abs(deltaX);
+      const absDeltaY = Math.abs(deltaY);
+
+      if (
+        absDeltaX < TOUCH_DRAG_LOCK_THRESHOLD_PX &&
+        absDeltaY < TOUCH_DRAG_LOCK_THRESHOLD_PX
+      ) {
+        return;
+      }
+
+      if (absDeltaY > absDeltaX) {
+        rangeDragStateRef.current = {
+          pointerId: event.pointerId,
+          mode: 'vertical',
+        };
+
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+
+        return;
+      }
+
+      rangeDragStateRef.current = {
+        ...dragState,
+        mode: 'horizontal',
+      };
+    } else if (dragState.mode === 'vertical') {
       return;
     }
 
@@ -180,15 +290,47 @@ export function RangeWithUnit({
   }
 
   function handleRangePointerEnd(event: PointerEvent<HTMLDivElement>) {
-    if (activeRangePointerIdRef.current !== event.pointerId) {
+    const dragState = rangeDragStateRef.current;
+
+    if (!dragState || dragState.pointerId !== event.pointerId) {
       return;
     }
 
-    activeRangePointerIdRef.current = null;
+    if (dragState.mode === 'pending') {
+      updateRangeFromPointer(event);
+      event.preventDefault();
+    } else if (dragState.mode === 'horizontal') {
+      event.preventDefault();
+    }
+
+    rangeDragStateRef.current = null;
+    stopDocumentResizeCursor();
+    restoreNumberFocus();
 
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
+  }
+
+  function handleRangePointerCancel(event: PointerEvent<HTMLDivElement>) {
+    const dragState = rangeDragStateRef.current;
+
+    if (!dragState || dragState.pointerId !== event.pointerId) {
+      return;
+    }
+
+    rangeDragStateRef.current = null;
+    stopDocumentResizeCursor();
+    restoreNumberFocus();
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
+
+  function handleRangeClick(event: MouseEvent<HTMLDivElement>) {
+    event.preventDefault();
+    restoreNumberFocus();
   }
 
   const rangeField = (
@@ -207,6 +349,7 @@ export function RangeWithUnit({
     >
       <div className="relative">
         <input
+          ref={numberInputRef}
           id={`${idBase}-number`}
           name={`${idBase}-number`}
           aria-label={ariaLabel}
@@ -229,11 +372,12 @@ export function RangeWithUnit({
         highlightClassName="rounded-b-lg"
       >
         <div
-          className="relative touch-none select-none"
-          onPointerCancel={handleRangePointerEnd}
+          className="relative touch-pan-y select-none"
+          onPointerCancel={handleRangePointerCancel}
           onPointerDownCapture={handleRangePointerDown}
           onPointerMove={handleRangePointerMove}
           onPointerUp={handleRangePointerEnd}
+          onClickCapture={handleRangeClick}
         >
           <span
             aria-hidden="true"
@@ -246,6 +390,7 @@ export function RangeWithUnit({
             ref={rangeInputRef}
             id={idBase}
             name={idBase}
+            aria-label={ariaLabel}
             type="range"
             min={sliderMin}
             max={sliderMax}
@@ -258,7 +403,7 @@ export function RangeWithUnit({
           />
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 -top-2 -bottom-2 z-20 select-none [@media(pointer:coarse)]:pointer-events-auto"
+            className="absolute inset-x-0 -top-2 -bottom-2 z-20 cursor-ew-resize select-none"
           />
         </div>
       </HelpTarget>
@@ -278,9 +423,12 @@ export function RangeWithUnit({
   return (
     <div className="grid gap-1">
       {showLabel ? (
-        <Field label={showValueInLabel ? `${label}: ${value} ${unit}` : label}>
+        <div className="block">
+          <span className="text-foreground mb-2 block text-sm font-semibold">
+            {showValueInLabel ? `${label}: ${value} ${unit}` : label}
+          </span>
           {rangeField}
-        </Field>
+        </div>
       ) : (
         rangeField
       )}
