@@ -11,11 +11,13 @@ import {
 } from 'react';
 import {
   createClipOutputGraph,
+  createDialUpOutputGraph,
   createInputAnalyser,
   createMonitorOutputGraph,
   createMusicOutputGraph,
   createSpeakerTestOutputGraph,
 } from './audio';
+import { DIAL_UP_DURATION_SECONDS } from './dialUpAudio';
 import {
   applySink,
   fallbackOutputDevice,
@@ -822,6 +824,41 @@ export function useSoundCheck() {
           ),
         }));
         startMusicProgressLoop();
+      } else if (speakerTestSettings.kind === 'dialUp') {
+        const startAtSeconds =
+          pendingMusicStartAtRef.current ?? musicPlayback.positionSeconds;
+
+        pendingMusicStartAtRef.current = null;
+        setMusicPlayback((currentPlayback) => ({
+          ...currentPlayback,
+          durationSeconds: DIAL_UP_DURATION_SECONDS,
+          isLoading: true,
+          isPlaying: false,
+        }));
+        musicOutputGraphRef.current = await createDialUpOutputGraph({
+          onEnded: stopMusicOutputGraph,
+          routeStreamToOutput: routePlaybackStreamToOutput,
+          setOutputLevel: (nextLevel) => setOutputSlotLevel('music', nextLevel),
+          setOutputSpectrum: (nextSpectrum) =>
+            setOutputSlotSpectrum('music', nextSpectrum),
+          startAtSeconds,
+        });
+        setIsMusicOutputActive(true);
+        setMusicPlayback((currentPlayback) => ({
+          ...currentPlayback,
+          durationSeconds:
+            musicOutputGraphRef.current?.durationSeconds ??
+            DIAL_UP_DURATION_SECONDS,
+          isLoading: false,
+          isPlaying: true,
+          positionSeconds: clamp(
+            startAtSeconds,
+            0,
+            musicOutputGraphRef.current?.durationSeconds ??
+              DIAL_UP_DURATION_SECONDS,
+          ),
+        }));
+        startMusicProgressLoop();
       } else {
         musicOutputGraphRef.current = await createSpeakerTestOutputGraph({
           kind: speakerTestSettings.kind,
@@ -837,7 +874,9 @@ export function useSoundCheck() {
       setStatusMessage(
         speakerTestSettings.kind === 'music'
           ? `Playing music on ${selectedOutputName}.`
-          : `Playing test sound on ${selectedOutputName}.`,
+          : speakerTestSettings.kind === 'dialUp'
+            ? `Playing dial-up tones on ${selectedOutputName}.`
+            : `Playing test sound on ${selectedOutputName}.`,
       );
     } catch (error) {
       stopMusicOutputGraph();
@@ -880,8 +919,16 @@ export function useSoundCheck() {
       isPlaying: false,
       positionSeconds,
     }));
-    setStatusMessage('Music paused.');
-  }, [musicPlayback.positionSeconds, stopMusicProgressLoop]);
+    setStatusMessage(
+      speakerTestSettings.kind === 'dialUp'
+        ? 'Dial-up paused.'
+        : 'Music paused.',
+    );
+  }, [
+    musicPlayback.positionSeconds,
+    speakerTestSettings.kind,
+    stopMusicProgressLoop,
+  ]);
 
   const resumeMusicPlayback = useCallback(() => {
     if (appPaused || outputMuted) {
@@ -903,7 +950,11 @@ export function useSoundCheck() {
         isPlaying: true,
       }));
       startMusicProgressLoop();
-      setStatusMessage(`Playing music on ${selectedOutputName}.`);
+      setStatusMessage(
+        speakerTestSettings.kind === 'dialUp'
+          ? `Playing dial-up tones on ${selectedOutputName}.`
+          : `Playing music on ${selectedOutputName}.`,
+      );
       return;
     }
 
@@ -914,6 +965,7 @@ export function useSoundCheck() {
     musicPlayback.positionSeconds,
     outputMuted,
     selectedOutputName,
+    speakerTestSettings.kind,
     startMusicProgressLoop,
     startSpeakerTest,
   ]);
@@ -1642,14 +1694,25 @@ export function useSoundCheck() {
         kind,
       }));
 
-      if (kind !== 'music') {
+      if (kind !== 'music' && kind !== 'dialUp') {
         setMusicPlayback((currentPlayback) => ({
           ...currentPlayback,
+          durationSeconds: 0,
           isLoading: false,
           isPlaying: false,
           positionSeconds: 0,
         }));
+        return;
       }
+
+      setMusicPlayback((currentPlayback) => ({
+        ...currentPlayback,
+        durationSeconds: kind === 'dialUp' ? DIAL_UP_DURATION_SECONDS : 0,
+        isLoading: false,
+        isPlaying: false,
+        marks: kind === 'dialUp' ? [] : currentPlayback.marks,
+        positionSeconds: 0,
+      }));
     },
     [stopMusicOutputGraph],
   );

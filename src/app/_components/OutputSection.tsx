@@ -5,6 +5,7 @@ import {
   type ChangeEvent,
   type RefObject,
 } from 'react';
+import { DIAL_UP_DURATION_SECONDS } from '@/utils/dialUpAudio';
 import { speakerMusicSources } from '@/utils/speakerMusic';
 import type { SpeakerMusicSource, SpeakerTestKind } from '@/utils/types';
 import { formatSeconds, joinClasses } from '@/utils/utils';
@@ -28,6 +29,7 @@ const speakerTestOptions: { kind: SpeakerTestKind; label: string }[] = [
   { kind: 'tone', label: 'Steady tone' },
   { kind: 'modulatedTone', label: 'Modulating tone' },
   { kind: 'sweep', label: 'Frequency sweep' },
+  { kind: 'dialUp', label: 'Dial-up' },
   { kind: 'music', label: 'Music' },
 ];
 const HELP_DEMO_RECORDING_DURATION_SECONDS = 5;
@@ -191,6 +193,8 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
                   soundCheck={soundCheck}
                 />
               </>
+            ) : testKind === 'dialUp' ? (
+              <DialUpConfig soundCheck={soundCheck} />
             ) : (
               <div>
                 <Button
@@ -530,6 +534,37 @@ function HelpDemoRecordedClip() {
         seekName="help-demo-recorded-clip-position"
       />
     </div>
+  );
+}
+
+function DialUpConfig({ soundCheck }: SoundCheckProps) {
+  const { durationSeconds, isLoading, isPlaying, positionSeconds } =
+    soundCheck.musicPlayback;
+  const effectiveDurationSeconds = durationSeconds || DIAL_UP_DURATION_SECONDS;
+  const canUseTransport =
+    soundCheck.speakerTestSettings.kind === 'dialUp' &&
+    !soundCheck.appPaused &&
+    !soundCheck.outputMuted;
+
+  return (
+    <AudioPlaybackControls
+      buttonLabel={
+        isLoading
+          ? 'Loading dial-up tones'
+          : isPlaying
+            ? 'Pause dial-up tones'
+            : 'Play dial-up tones'
+      }
+      canUseTransport={canUseTransport}
+      durationSeconds={effectiveDurationSeconds}
+      isLoading={isLoading}
+      isPlaying={isPlaying}
+      onSeek={soundCheck.handleMusicSeek}
+      onToggle={soundCheck.toggleMusicPlayback}
+      positionSeconds={positionSeconds}
+      seekLabel="Dial-up playback position"
+      seekName="dial-up-playback-position"
+    />
   );
 }
 

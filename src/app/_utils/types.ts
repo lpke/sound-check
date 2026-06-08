@@ -10,7 +10,12 @@ export type PermissionState = 'idle' | 'granted' | 'blocked';
 export type RoutedMode = 'clip' | 'idle' | 'monitor' | 'speakerTest';
 export type StatusTone = 'danger' | 'good' | 'idle' | 'warn';
 export type SectionSignalState = 'active' | 'off' | 'ready';
-export type SpeakerTestKind = 'modulatedTone' | 'music' | 'sweep' | 'tone';
+export type SpeakerTestKind =
+  | 'dialUp'
+  | 'modulatedTone'
+  | 'music'
+  | 'sweep'
+  | 'tone';
 export type SpeakerMusicTrackId = 'blindingLights' | 'evilManBlues';
 export type SpeakerMusicSource = SpeakerMusicTrackId | 'file';
 

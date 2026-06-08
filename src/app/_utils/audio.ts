@@ -1,4 +1,5 @@
 import { clamp } from './utils';
+import { createDialUpAudioBuffer } from './dialUpAudio';
 import { MAX_MONITOR_DELAY_MS } from './types';
 import type {
   ActiveInputAnalyser,
@@ -84,7 +85,7 @@ export async function createSpeakerTestOutputGraph({
   setOutputSpectrum,
   toneFrequency,
 }: {
-  kind: Exclude<SpeakerTestKind, 'music'>;
+  kind: Exclude<SpeakerTestKind, 'dialUp' | 'music'>;
   routeStreamToOutput: (stream: MediaStream) => Promise<void>;
   setOutputLevel: LevelSetter;
   setOutputSpectrum?: FrequencyLevelSetter;
@@ -183,6 +184,40 @@ export async function createSpeakerTestOutputGraph({
       analyser.disconnect();
     },
   };
+}
+
+export async function createDialUpOutputGraph({
+  onEnded,
+  routeStreamToOutput,
+  setOutputLevel,
+  setOutputSpectrum,
+  startAtSeconds = 0,
+}: {
+  onEnded: () => void;
+  routeStreamToOutput: (stream: MediaStream) => Promise<void>;
+  setOutputLevel: LevelSetter;
+  setOutputSpectrum?: FrequencyLevelSetter;
+  startAtSeconds?: number;
+}): Promise<ActiveOutputGraph> {
+  const context = createAudioContext();
+
+  try {
+    const audioBuffer = createDialUpAudioBuffer(context);
+
+    return await createAudioBufferOutputGraph({
+      audioBuffer,
+      context,
+      mode: 'speakerTest',
+      onEnded,
+      routeStreamToOutput,
+      setOutputLevel,
+      setOutputSpectrum,
+      startAtSeconds,
+    });
+  } catch (error) {
+    context.close().catch(() => undefined);
+    throw error;
+  }
 }
 
 export async function createMusicOutputGraph({
