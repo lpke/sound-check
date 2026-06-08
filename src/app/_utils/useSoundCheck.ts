@@ -11,13 +11,11 @@ import {
 } from 'react';
 import {
   createClipOutputGraph,
-  createDialUpOutputGraph,
   createInputAnalyser,
   createMonitorOutputGraph,
   createMusicOutputGraph,
   createSpeakerTestOutputGraph,
 } from './audio';
-import { DIAL_UP_DURATION_SECONDS } from './dialUpAudio';
 import {
   applySink,
   fallbackOutputDevice,
@@ -71,6 +69,8 @@ const defaultSpeakerTestSettings: SpeakerTestSettings = {
   musicSource: 'blindingLights',
   toneFrequency: 440,
 };
+const DIAL_UP_AUDIO_PATH = '/audio/dial-up.mp3';
+const DIAL_UP_PLAYBACK_GAIN = 3;
 const SPECTRUM_PEAK_DECAY_PER_FRAME = 0.025;
 
 type MusicPlaybackState = {
@@ -860,12 +860,22 @@ export function useSoundCheck() {
         pendingMusicStartAtRef.current = null;
         setMusicPlayback((currentPlayback) => ({
           ...currentPlayback,
-          durationSeconds: DIAL_UP_DURATION_SECONDS,
           isLoading: true,
           isPlaying: false,
+          marks: [],
         }));
-        musicOutputGraphRef.current = await createDialUpOutputGraph({
+        musicOutputGraphRef.current = await createMusicOutputGraph({
+          getArrayBuffer: async () => {
+            const response = await fetch(DIAL_UP_AUDIO_PATH);
+
+            if (!response.ok) {
+              throw new Error('Dial-up audio could not be loaded.');
+            }
+
+            return response.arrayBuffer();
+          },
           onEnded: stopMusicOutputGraph,
+          playbackGain: DIAL_UP_PLAYBACK_GAIN,
           routeStreamToOutput: routePlaybackStreamToOutput,
           setOutputLevel: (nextLevel) => setOutputSlotLevel('music', nextLevel),
           setOutputSpectrum: (nextSpectrum) =>
@@ -877,14 +887,14 @@ export function useSoundCheck() {
           ...currentPlayback,
           durationSeconds:
             musicOutputGraphRef.current?.durationSeconds ??
-            DIAL_UP_DURATION_SECONDS,
+            currentPlayback.durationSeconds,
           isLoading: false,
           isPlaying: true,
           positionSeconds: clamp(
             startAtSeconds,
             0,
             musicOutputGraphRef.current?.durationSeconds ??
-              DIAL_UP_DURATION_SECONDS,
+              currentPlayback.durationSeconds,
           ),
         }));
         startMusicProgressLoop();
@@ -1756,7 +1766,7 @@ export function useSoundCheck() {
 
       setMusicPlayback((currentPlayback) => ({
         ...currentPlayback,
-        durationSeconds: kind === 'dialUp' ? DIAL_UP_DURATION_SECONDS : 0,
+        durationSeconds: 0,
         isLoading: false,
         isPlaying: false,
         marks: kind === 'dialUp' ? [] : currentPlayback.marks,

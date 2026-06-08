@@ -1,5 +1,4 @@
 import { clamp } from './utils';
-import { createDialUpAudioBuffer } from './dialUpAudio';
 import { MAX_MONITOR_DELAY_MS } from './types';
 import type {
   ActiveInputAnalyser,
@@ -186,43 +185,10 @@ export async function createSpeakerTestOutputGraph({
   };
 }
 
-export async function createDialUpOutputGraph({
-  onEnded,
-  routeStreamToOutput,
-  setOutputLevel,
-  setOutputSpectrum,
-  startAtSeconds = 0,
-}: {
-  onEnded: () => void;
-  routeStreamToOutput: (stream: MediaStream) => Promise<void>;
-  setOutputLevel: LevelSetter;
-  setOutputSpectrum?: FrequencyLevelSetter;
-  startAtSeconds?: number;
-}): Promise<ActiveOutputGraph> {
-  const context = createAudioContext();
-
-  try {
-    const audioBuffer = createDialUpAudioBuffer(context);
-
-    return await createAudioBufferOutputGraph({
-      audioBuffer,
-      context,
-      mode: 'speakerTest',
-      onEnded,
-      routeStreamToOutput,
-      setOutputLevel,
-      setOutputSpectrum,
-      startAtSeconds,
-    });
-  } catch (error) {
-    context.close().catch(() => undefined);
-    throw error;
-  }
-}
-
 export async function createMusicOutputGraph({
   getArrayBuffer,
   onEnded,
+  playbackGain = 1,
   routeStreamToOutput,
   setOutputLevel,
   setOutputSpectrum,
@@ -230,6 +196,7 @@ export async function createMusicOutputGraph({
 }: {
   getArrayBuffer: () => Promise<ArrayBuffer>;
   onEnded: () => void;
+  playbackGain?: number;
   routeStreamToOutput: (stream: MediaStream) => Promise<void>;
   setOutputLevel: LevelSetter;
   setOutputSpectrum?: FrequencyLevelSetter;
@@ -245,6 +212,7 @@ export async function createMusicOutputGraph({
       context,
       mode: 'speakerTest',
       onEnded,
+      playbackGain,
       routeStreamToOutput,
       setOutputLevel,
       setOutputSpectrum,
@@ -349,6 +317,7 @@ async function createAudioBufferOutputGraph({
   context,
   mode,
   onEnded,
+  playbackGain = 1,
   routeStreamToOutput,
   setOutputLevel,
   setOutputSpectrum,
@@ -358,6 +327,7 @@ async function createAudioBufferOutputGraph({
   context: AudioContext;
   mode: ActiveOutputGraph['mode'];
   onEnded: () => void;
+  playbackGain?: number;
   routeStreamToOutput: (stream: MediaStream) => Promise<void>;
   setOutputLevel: LevelSetter;
   setOutputSpectrum?: FrequencyLevelSetter;
@@ -365,10 +335,13 @@ async function createAudioBufferOutputGraph({
 }): Promise<ActiveOutputGraph> {
   const analyser = context.createAnalyser();
   const destination = context.createMediaStreamDestination();
+  const gain = context.createGain();
 
   analyser.fftSize = 1024;
   analyser.smoothingTimeConstant = 0;
+  gain.gain.value = playbackGain;
 
+  gain.connect(analyser);
   analyser.connect(destination);
 
   await routeStreamToOutput(destination.stream);
@@ -434,7 +407,7 @@ async function createAudioBufferOutputGraph({
     pausedAt = sourceOffset;
     source = nextSource;
     nextSource.buffer = audioBuffer;
-    nextSource.connect(analyser);
+    nextSource.connect(gain);
 
     const startAt = context.currentTime + SOURCE_START_DELAY_SECONDS;
 
@@ -482,6 +455,7 @@ async function createAudioBufferOutputGraph({
       isCancelled = true;
       cancelLevelLoop();
       disconnectSource();
+      gain.disconnect();
       analyser.disconnect();
     },
   };

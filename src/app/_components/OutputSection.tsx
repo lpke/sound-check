@@ -5,7 +5,6 @@ import {
   type ChangeEvent,
   type RefObject,
 } from 'react';
-import { DIAL_UP_DURATION_SECONDS } from '@/utils/dialUpAudio';
 import { speakerMusicSources } from '@/utils/speakerMusic';
 import type { SpeakerMusicSource, SpeakerTestKind } from '@/utils/types';
 import { formatSeconds, joinClasses } from '@/utils/utils';
@@ -672,7 +671,6 @@ function HelpDemoRecordedClip() {
 function DialUpConfig({ soundCheck }: SoundCheckProps) {
   const { durationSeconds, isLoading, isPlaying, positionSeconds } =
     soundCheck.musicPlayback;
-  const effectiveDurationSeconds = durationSeconds || DIAL_UP_DURATION_SECONDS;
   const canUseTransport =
     soundCheck.speakerTestSettings.kind === 'dialUp' &&
     !soundCheck.appPaused &&
@@ -688,7 +686,7 @@ function DialUpConfig({ soundCheck }: SoundCheckProps) {
             : 'Play dial-up tones'
       }
       canUseTransport={canUseTransport}
-      durationSeconds={effectiveDurationSeconds}
+      durationSeconds={durationSeconds}
       isLoading={isLoading}
       isPlaying={isPlaying}
       onSeek={soundCheck.handleMusicSeek}
