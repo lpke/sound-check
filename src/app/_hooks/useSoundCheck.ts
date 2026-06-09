@@ -226,9 +226,17 @@ export function useSoundCheck() {
   const resetOutputForDeviceWarning = useCallback(
     ({ resumeMonitor = true }: { resumeMonitor?: boolean } = {}) => {
       const activeClipId = recordedPlayback.recordedPlayback.activeClipId;
-      const nextRestart: PendingOutputRestart = speakerTest.isMusicOutputActive
+      const isPausableSpeakerTest =
+        speakerTest.speakerTestSettings.kind === 'music' ||
+        speakerTest.speakerTestSettings.kind === 'dialUp';
+      const shouldRestartSpeakerTest =
+        speakerTest.isMusicOutputActive &&
+        (!isPausableSpeakerTest || speakerTest.musicPlayback.isPlaying);
+      const nextRestart: PendingOutputRestart = shouldRestartSpeakerTest
         ? { mode: 'speakerTest' }
-        : recordedPlayback.isRecordingPlaybackActive && activeClipId
+        : recordedPlayback.isRecordingPlaybackActive &&
+            recordedPlayback.recordedPlayback.isPlaying &&
+            activeClipId
           ? { mode: 'clip', clipId: activeClipId }
           : monitor.monitorEnabled && resumeMonitor
             ? { mode: 'monitor' }
@@ -241,7 +249,10 @@ export function useSoundCheck() {
       monitor.monitorEnabled,
       recordedPlayback.isRecordingPlaybackActive,
       recordedPlayback.recordedPlayback.activeClipId,
+      recordedPlayback.recordedPlayback.isPlaying,
       speakerTest.isMusicOutputActive,
+      speakerTest.musicPlayback.isPlaying,
+      speakerTest.speakerTestSettings.kind,
       stopOutputGraph,
     ],
   );

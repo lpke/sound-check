@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
 import {
   getDefaultDeviceCheckMessage,
   getDefaultDeviceUncertaintyMessage,
@@ -8,6 +8,7 @@ import { MAX_MONITOR_DELAY_MS } from '@/utils/types';
 import { clamp, formatSeconds, joinClasses } from '@/utils/utils';
 import type { SoundCheckProps } from './componentTypes';
 import { checkboxClassName } from './controlStyles';
+import { DeviceQualityNotice } from './DeviceWarning';
 import { useHelpMode } from '@/hooks/useHelpMode';
 import { HelpTarget, HelpTip } from './HelpMode';
 import { MicrophoneIcon } from './Icons';
@@ -16,7 +17,12 @@ import { SectionHeader, SectionShell, StickyIoChrome } from './SectionChrome';
 import { SettingsGroup } from './SettingsGroup';
 import { Button, LevelMeter } from './UI';
 
+type InputQualityNoticeCard = 'monitor' | 'recording';
+
 export function InputSection({ soundCheck }: SoundCheckProps) {
+  const [lastQualityNoticeCard, setLastQualityNoticeCard] =
+    useState<InputQualityNoticeCard | null>(null);
+  const warningStorageKey = 'sound-check-audio-quality-warning-ignored';
   const isInputStopped = soundCheck.appPaused || soundCheck.inputMuted;
   const selectedInputDevice = soundCheck.inputDevices.find(
     (device) => device.deviceId === soundCheck.selectedInputId,
@@ -57,6 +63,23 @@ export function InputSection({ soundCheck }: SoundCheckProps) {
     </>
   ) : null;
   const inputQualityWarningTone = shouldWarnSharedDevice ? 'warning' : 'muted';
+  const inputQualityNotice = inputQualityWarning ? (
+    <DeviceQualityNotice
+      accent="input"
+      deviceKind="mic"
+      storageKey={warningStorageKey}
+      tone={inputQualityWarningTone}
+    />
+  ) : null;
+  const hasActiveQualityNoticeCard =
+    soundCheck.monitorEnabled || soundCheck.isRecording;
+
+  const showMonitorQualityNotice =
+    soundCheck.monitorEnabled ||
+    (!hasActiveQualityNoticeCard && lastQualityNoticeCard === 'monitor');
+  const showRecordingQualityNotice =
+    soundCheck.isRecording ||
+    (!hasActiveQualityNoticeCard && lastQualityNoticeCard === 'recording');
 
   return (
     <SectionShell muted={isInputStopped}>
@@ -79,7 +102,7 @@ export function InputSection({ soundCheck }: SoundCheckProps) {
           signalState={soundCheck.inputSignalState}
           toggleLabel={isInputStopped ? 'Unmute microphone' : 'Mute microphone'}
           warningMessage={inputQualityWarning}
-          warningStorageKey="sound-check-audio-quality-warning-ignored"
+          warningStorageKey={warningStorageKey}
           warningTone={inputQualityWarningTone}
         />
         <LevelMeter
@@ -92,8 +115,16 @@ export function InputSection({ soundCheck }: SoundCheckProps) {
 
       <div className="grid gap-4 p-4 sm:p-5">
         <ProcessingBlock soundCheck={soundCheck} />
-        <LiveMonitorBlock soundCheck={soundCheck} />
-        <RecordingCapture soundCheck={soundCheck} />
+        <LiveMonitorBlock
+          onActivate={() => setLastQualityNoticeCard('monitor')}
+          qualityNotice={showMonitorQualityNotice ? inputQualityNotice : null}
+          soundCheck={soundCheck}
+        />
+        <RecordingCapture
+          onActivate={() => setLastQualityNoticeCard('recording')}
+          qualityNotice={showRecordingQualityNotice ? inputQualityNotice : null}
+          soundCheck={soundCheck}
+        />
       </div>
     </SectionShell>
   );
@@ -203,9 +234,13 @@ function ProcessingOption({
   );
 }
 
-function LiveMonitorBlock({ soundCheck }: SoundCheckProps) {
+function LiveMonitorBlock({
+  onActivate,
+  qualityNotice,
+  soundCheck,
+}: SoundCheckProps & { onActivate: () => void; qualityNotice: ReactNode }) {
   return (
-    <SettingsGroup title="Live monitor">
+    <SettingsGroup title="Live monitor" description={qualityNotice}>
       <div className="grid gap-4">
         <RangeWithUnit
           accent="input"
@@ -236,7 +271,10 @@ function LiveMonitorBlock({ soundCheck }: SoundCheckProps) {
               soundCheck.inputMuted ||
               soundCheck.outputMuted
             }
-            onClick={soundCheck.startMonitor}
+            onClick={() => {
+              onActivate();
+              soundCheck.startMonitor();
+            }}
           >
             Start monitor
           </Button>
@@ -246,7 +284,11 @@ function LiveMonitorBlock({ soundCheck }: SoundCheckProps) {
   );
 }
 
-function RecordingCapture({ soundCheck }: SoundCheckProps) {
+function RecordingCapture({
+  onActivate,
+  qualityNotice,
+  soundCheck,
+}: SoundCheckProps & { onActivate: () => void; qualityNotice: ReactNode }) {
   const { isHelpModeActive, isHelpModeExiting } = useHelpMode();
   const latestRecordedClip = soundCheck.recordedClips.at(-1);
   const recordingInputLevel = clamp(soundCheck.inputLevel, 0, 1);
@@ -272,6 +314,9 @@ function RecordingCapture({ soundCheck }: SoundCheckProps) {
     >
       <div className="mb-4">
         <h2 className="text-foreground text-sm font-semibold">Record input</h2>
+        {qualityNotice ? (
+          <p className="text-muted mt-1 text-xs leading-5">{qualityNotice}</p>
+        ) : null}
       </div>
       <div
         className={joinClasses(
@@ -301,7 +346,10 @@ function RecordingCapture({ soundCheck }: SoundCheckProps) {
             ) : (
               <Button
                 disabled={soundCheck.appPaused || soundCheck.inputMuted}
-                onClick={soundCheck.startRecording}
+                onClick={() => {
+                  onActivate();
+                  soundCheck.startRecording();
+                }}
                 className="w-full"
               >
                 Record input

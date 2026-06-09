@@ -4,6 +4,7 @@ import {
   useState,
   type ChangeEvent,
   type RefObject,
+  type ReactNode,
 } from 'react';
 import {
   getSpeakerMusicQualityOptions,
@@ -22,6 +23,7 @@ import {
 import { formatSeconds, joinClasses } from '@/utils/utils';
 import type { SoundCheckProps } from './componentTypes';
 import { controlClassName } from './controlStyles';
+import { DeviceQualityNotice } from './DeviceWarning';
 import { useHelpMode } from '@/hooks/useHelpMode';
 import { HelpTarget, HelpTip } from './HelpMode';
 import {
@@ -56,6 +58,7 @@ type HelpMusicMark = {
 type VisibleMusicMark = HelpMusicMark & {
   kind: 'actual' | 'demo' | 'temporary';
 };
+type OutputQualityNoticeCard = 'recordedPlayback' | 'speakerTest';
 
 function getHelpMusicMarks(durationSeconds: number, idPrefix: string) {
   return HELP_MUSIC_MARK_RATIOS.map((ratio, index) => ({
@@ -72,6 +75,9 @@ function getDefaultHelpDemoMusicMarks() {
 }
 
 export function OutputSection({ soundCheck }: SoundCheckProps) {
+  const [lastQualityNoticeCard, setLastQualityNoticeCard] =
+    useState<OutputQualityNoticeCard | null>(null);
+  const warningStorageKey = 'sound-check-audio-quality-warning-ignored';
   const musicFileInputRef = useRef<HTMLInputElement | null>(null);
   const isOutputStopped = soundCheck.appPaused || soundCheck.outputMuted;
   const testKind = soundCheck.speakerTestSettings.kind;
@@ -117,6 +123,36 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
     </>
   ) : null;
   const outputQualityWarningTone = shouldWarnSharedDevice ? 'warning' : 'muted';
+  const outputQualityNotice = outputQualityWarning ? (
+    <DeviceQualityNotice
+      accent="output"
+      deviceKind="speaker"
+      storageKey={warningStorageKey}
+      tone={outputQualityWarningTone}
+    />
+  ) : null;
+  const isSpeakerTestQualityNoticeActive =
+    isSpeakerTestActive || soundCheck.musicPlayback.isLoading;
+  const isRecordedPlaybackQualityNoticeActive =
+    soundCheck.recordedPlayback.isPlaying;
+  const hasActiveQualityNoticeCard =
+    isSpeakerTestQualityNoticeActive || isRecordedPlaybackQualityNoticeActive;
+
+  const showSpeakerTestQualityNotice =
+    isSpeakerTestQualityNoticeActive ||
+    (!hasActiveQualityNoticeCard && lastQualityNoticeCard === 'speakerTest');
+  const showRecordedPlaybackQualityNotice =
+    isRecordedPlaybackQualityNoticeActive ||
+    (!hasActiveQualityNoticeCard &&
+      lastQualityNoticeCard === 'recordedPlayback');
+
+  function markSpeakerTestActive() {
+    setLastQualityNoticeCard('speakerTest');
+  }
+
+  function markRecordedPlaybackActive() {
+    setLastQualityNoticeCard('recordedPlayback');
+  }
 
   function handleSpeakerTestKindChange(event: ChangeEvent<HTMLSelectElement>) {
     const nextKind = event.target.value as SpeakerTestKind;
@@ -161,7 +197,7 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
           signalState={soundCheck.outputSignalState}
           toggleLabel={isOutputStopped ? 'Unmute speaker' : 'Mute speaker'}
           warningMessage={outputQualityWarning}
-          warningStorageKey="sound-check-audio-quality-warning-ignored"
+          warningStorageKey={warningStorageKey}
           warningTone={outputQualityWarningTone}
         />
         <LevelMeter
@@ -188,7 +224,12 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
           </SettingsGroup>
         ) : null}
 
-        <SettingsGroup title="Speaker test">
+        <SettingsGroup
+          title="Speaker test"
+          description={
+            showSpeakerTestQualityNotice ? outputQualityNotice : null
+          }
+        >
           <div className="grid gap-4">
             <HelpTarget>
               <Field label="Sound">
@@ -251,21 +292,29 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
                   musicFileInputRef={musicFileInputRef}
                   onMusicQualityChange={handleMusicQualityChange}
                   onMusicSourceChange={handleMusicSourceChange}
+                  onPlaybackActivate={markSpeakerTestActive}
                   soundCheck={soundCheck}
                 />
               </>
             ) : testKind === 'dialUp' ? (
-              <DialUpConfig soundCheck={soundCheck} />
+              <DialUpConfig
+                onPlaybackActivate={markSpeakerTestActive}
+                soundCheck={soundCheck}
+              />
             ) : (
               <div>
                 <Button
                   variant={isToneTestPlaying ? 'danger' : 'outputPrimary'}
                   className="w-40"
-                  onClick={
-                    isToneTestPlaying
-                      ? soundCheck.stopPlaybackOutput
-                      : soundCheck.startSpeakerTest
-                  }
+                  onClick={() => {
+                    if (isToneTestPlaying) {
+                      soundCheck.stopPlaybackOutput();
+                      return;
+                    }
+
+                    markSpeakerTestActive();
+                    soundCheck.startSpeakerTest();
+                  }}
                   disabled={soundCheck.appPaused || soundCheck.outputMuted}
                 >
                   {isToneTestPlaying ? 'Stop test sound' : 'Play test sound'}
@@ -275,13 +324,26 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
           </div>
         </SettingsGroup>
 
-        <RecordingPlayback soundCheck={soundCheck} />
+        <RecordingPlayback
+          onPlaybackActivate={markRecordedPlaybackActive}
+          qualityNotice={
+            showRecordedPlaybackQualityNotice ? outputQualityNotice : null
+          }
+          soundCheck={soundCheck}
+        />
       </div>
     </SectionShell>
   );
 }
 
-function RecordingPlayback({ soundCheck }: SoundCheckProps) {
+function RecordingPlayback({
+  onPlaybackActivate,
+  qualityNotice,
+  soundCheck,
+}: SoundCheckProps & {
+  onPlaybackActivate: () => void;
+  qualityNotice: ReactNode;
+}) {
   const { isHelpModeActive, isHelpModeExiting } = useHelpMode();
   const [enteringClipIds, setEnteringClipIds] = useState<Set<string>>(
     () => new Set(),
@@ -471,7 +533,11 @@ function RecordingPlayback({ soundCheck }: SoundCheckProps) {
 
   return (
     <HelpTarget activeClassName="z-50" className="block">
-      <SettingsGroup title="Recorded playback" titleAction={deleteAllAction}>
+      <SettingsGroup
+        title="Recorded playback"
+        description={qualityNotice}
+        titleAction={deleteAllAction}
+      >
         <div className="grid gap-2">
           {shouldShowHelpDemo ? (
             <div
@@ -573,6 +639,7 @@ function RecordingPlayback({ soundCheck }: SoundCheckProps) {
                           );
                         }}
                         onToggle={() => {
+                          onPlaybackActivate();
                           soundCheck.selectRecordedClip(clip.id);
                           soundCheck.toggleRecordedClipPlayback(clip.id);
                         }}
@@ -730,7 +797,10 @@ function HelpDemoRecordedClip() {
   );
 }
 
-function DialUpConfig({ soundCheck }: SoundCheckProps) {
+function DialUpConfig({
+  onPlaybackActivate,
+  soundCheck,
+}: SoundCheckProps & { onPlaybackActivate: () => void }) {
   const { durationSeconds, isLoading, isPlaying, positionSeconds } =
     soundCheck.musicPlayback;
   const canUseTransport =
@@ -752,7 +822,10 @@ function DialUpConfig({ soundCheck }: SoundCheckProps) {
       isLoading={isLoading}
       isPlaying={isPlaying}
       onSeek={soundCheck.handleMusicSeek}
-      onToggle={soundCheck.toggleMusicPlayback}
+      onToggle={() => {
+        onPlaybackActivate();
+        soundCheck.toggleMusicPlayback();
+      }}
       positionSeconds={positionSeconds}
       seekLabel="Dial-up playback position"
       seekName="dial-up-playback-position"
@@ -764,11 +837,13 @@ function MusicConfig({
   musicFileInputRef,
   onMusicQualityChange,
   onMusicSourceChange,
+  onPlaybackActivate,
   soundCheck,
 }: SoundCheckProps & {
   musicFileInputRef: RefObject<HTMLInputElement | null>;
   onMusicQualityChange: (event: ChangeEvent<HTMLSelectElement>) => void;
   onMusicSourceChange: (event: ChangeEvent<HTMLSelectElement>) => void;
+  onPlaybackActivate: () => void;
 }) {
   const { isHelpModeActive, isHelpModeExiting } = useHelpMode();
   const {
@@ -1014,7 +1089,10 @@ function MusicConfig({
 
             soundCheck.handleMusicSeek(nextPosition);
           }}
-          onToggle={soundCheck.toggleMusicPlayback}
+          onToggle={() => {
+            onPlaybackActivate();
+            soundCheck.toggleMusicPlayback();
+          }}
           positionSeconds={effectivePositionSeconds}
           seekLabel="Music playback position"
           seekName="music-playback-position"
@@ -1045,6 +1123,7 @@ function MusicConfig({
                       return;
                     }
 
+                    onPlaybackActivate();
                     soundCheck.playMusicFromMark(mark.seconds);
                   }}
                   disabled={
