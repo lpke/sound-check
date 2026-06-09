@@ -4,6 +4,7 @@ import { useHelpMode } from '@/hooks/useHelpMode';
 import { HelpTip } from './HelpMode';
 
 export function SettingsGroup({
+  animateDescription = false,
   children,
   className,
   description,
@@ -12,6 +13,7 @@ export function SettingsGroup({
   title,
   titleAction,
 }: {
+  animateDescription?: boolean;
   children: ReactNode;
   className?: string;
   description?: ReactNode;
@@ -25,6 +27,7 @@ export function SettingsGroup({
   const isHelpModeOpen = isHelpModeActive && !isHelpModeExiting;
   const hasHeader = Boolean(title || description || titleAction);
   const hasTitleRow = Boolean(title || titleAction);
+  const shouldRenderDescription = animateDescription || description;
   const group = (
     <section
       data-help-anchor={hasHelpDescription ? 'true' : undefined}
@@ -49,15 +52,13 @@ export function SettingsGroup({
               ) : null}
             </div>
           ) : null}
-          {description ? (
-            <p
-              className={joinClasses(
-                'text-muted text-xs leading-5',
-                hasTitleRow && 'mt-1',
-              )}
+          {shouldRenderDescription ? (
+            <SettingsGroupDescription
+              visible={Boolean(description)}
+              withTitleGap={hasTitleRow}
             >
               {description}
-            </p>
+            </SettingsGroupDescription>
           ) : null}
         </div>
       ) : null}
@@ -80,5 +81,34 @@ export function SettingsGroup({
     >
       {group}
     </HelpTip>
+  );
+}
+
+export function SettingsGroupDescription({
+  children,
+  visible = Boolean(children),
+  withTitleGap = true,
+}: {
+  children: ReactNode;
+  visible?: boolean;
+  withTitleGap?: boolean;
+}) {
+  return (
+    <div
+      className={joinClasses(
+        'grid overflow-hidden transition-[grid-template-rows,margin-top] duration-200 ease-out',
+        visible ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
+        withTitleGap && (visible ? 'mt-1' : 'mt-0'),
+      )}
+    >
+      <p
+        className={joinClasses(
+          'text-muted min-h-0 text-xs leading-5 transition-[opacity,transform] duration-200 ease-out',
+          visible ? 'translate-y-0 opacity-100' : '-translate-y-1 opacity-0',
+        )}
+      >
+        {children}
+      </p>
+    </div>
   );
 }

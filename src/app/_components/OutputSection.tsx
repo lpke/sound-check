@@ -226,6 +226,7 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
 
         <SettingsGroup
           title="Speaker test"
+          animateDescription
           description={
             showSpeakerTestQualityNotice ? outputQualityNotice : null
           }
@@ -535,6 +536,7 @@ function RecordingPlayback({
     <HelpTarget activeClassName="z-50" className="block">
       <SettingsGroup
         title="Recorded playback"
+        animateDescription
         description={qualityNotice}
         titleAction={deleteAllAction}
       >

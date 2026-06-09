@@ -14,7 +14,7 @@ import { HelpTarget, HelpTip } from './HelpMode';
 import { MicrophoneIcon } from './Icons';
 import { RangeWithUnit } from './RangeWithUnit';
 import { SectionHeader, SectionShell, StickyIoChrome } from './SectionChrome';
-import { SettingsGroup } from './SettingsGroup';
+import { SettingsGroup, SettingsGroupDescription } from './SettingsGroup';
 import { Button, LevelMeter } from './UI';
 
 type InputQualityNoticeCard = 'monitor' | 'recording';
@@ -240,7 +240,11 @@ function LiveMonitorBlock({
   soundCheck,
 }: SoundCheckProps & { onActivate: () => void; qualityNotice: ReactNode }) {
   return (
-    <SettingsGroup title="Live monitor" description={qualityNotice}>
+    <SettingsGroup
+      title="Live monitor"
+      animateDescription
+      description={qualityNotice}
+    >
       <div className="grid gap-4">
         <RangeWithUnit
           accent="input"
@@ -314,9 +318,9 @@ function RecordingCapture({
     >
       <div className="mb-4">
         <h2 className="text-foreground text-sm font-semibold">Record input</h2>
-        {qualityNotice ? (
-          <p className="text-muted mt-1 text-xs leading-5">{qualityNotice}</p>
-        ) : null}
+        <SettingsGroupDescription visible={Boolean(qualityNotice)}>
+          {qualityNotice}
+        </SettingsGroupDescription>
       </div>
       <div
         className={joinClasses(
