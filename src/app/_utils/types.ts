@@ -17,6 +17,7 @@ export type SpeakerTestKind =
   | 'sweep'
   | 'tone';
 export type SpeakerMusicTrackId = 'blindingLights' | 'evilManBlues';
+export type SpeakerMusicQuality = 'flac' | 'mp3';
 export type SpeakerMusicSource = SpeakerMusicTrackId | 'file';
 
 export type AudioDevice = Pick<
@@ -83,6 +84,7 @@ export type SpeakerTestSettings = {
   kind: SpeakerTestKind;
   toneFrequency: number;
   musicFile: File | null;
+  musicQuality: SpeakerMusicQuality;
   musicSource: SpeakerMusicSource;
 };
 

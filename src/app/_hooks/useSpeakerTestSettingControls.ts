@@ -5,8 +5,10 @@ import {
   useCallback,
 } from 'react';
 import type { MusicPlaybackState } from '@/utils/soundCheckState';
+import { getDefaultMusicQuality } from '@/utils/speakerMusic';
 import type {
   ActiveOutputGraph,
+  SpeakerMusicQuality,
   SpeakerMusicSource,
   SpeakerTestKind,
   SpeakerTestSettings,
@@ -28,13 +30,17 @@ export function useSpeakerTestSettingControls({
 }: UseSpeakerTestSettingControlsOptions) {
   const handleSpeakerTestKindChange = useCallback(
     (kind: SpeakerTestKind) => {
-      if (musicOutputGraphRef.current?.mode === 'speakerTest') {
-        stopMusicOutputGraph();
-      }
+      stopMusicOutputGraph();
 
       setSpeakerTestSettings((currentSettings) => ({
         ...currentSettings,
         kind,
+        musicQuality:
+          kind === 'music'
+            ? getDefaultMusicQuality('blindingLights')
+            : currentSettings.musicQuality,
+        musicSource:
+          kind === 'music' ? 'blindingLights' : currentSettings.musicSource,
       }));
 
       if (kind !== 'music' && kind !== 'dialUp') {
@@ -43,6 +49,8 @@ export function useSpeakerTestSettingControls({
           durationSeconds: 0,
           isLoading: false,
           isPlaying: false,
+          loadingPhase: null,
+          loadingProgressPercent: null,
           positionSeconds: 0,
         }));
         return;
@@ -53,16 +61,13 @@ export function useSpeakerTestSettingControls({
         durationSeconds: 0,
         isLoading: false,
         isPlaying: false,
+        loadingPhase: null,
+        loadingProgressPercent: null,
         marks: kind === 'dialUp' ? [] : currentPlayback.marks,
         positionSeconds: 0,
       }));
     },
-    [
-      musicOutputGraphRef,
-      setMusicPlayback,
-      setSpeakerTestSettings,
-      stopMusicOutputGraph,
-    ],
+    [setMusicPlayback, setSpeakerTestSettings, stopMusicOutputGraph],
   );
 
   const handleSpeakerToneFrequencyChange = useCallback(
@@ -87,12 +92,11 @@ export function useSpeakerTestSettingControls({
 
   const handleSpeakerMusicSourceChange = useCallback(
     (musicSource: SpeakerMusicSource) => {
-      if (musicOutputGraphRef.current?.mode === 'speakerTest') {
-        stopMusicOutputGraph();
-      }
+      stopMusicOutputGraph();
 
       setSpeakerTestSettings((currentSettings) => ({
         ...currentSettings,
+        musicQuality: getDefaultMusicQuality(musicSource),
         musicSource,
       }));
       setMusicPlayback((currentPlayback) => ({
@@ -100,27 +104,23 @@ export function useSpeakerTestSettingControls({
         durationSeconds: 0,
         isLoading: false,
         isPlaying: false,
+        loadingPhase: null,
+        loadingProgressPercent: null,
         marks: [],
         positionSeconds: 0,
       }));
     },
-    [
-      musicOutputGraphRef,
-      setMusicPlayback,
-      setSpeakerTestSettings,
-      stopMusicOutputGraph,
-    ],
+    [setMusicPlayback, setSpeakerTestSettings, stopMusicOutputGraph],
   );
 
   const handleSpeakerMusicFileChange = useCallback(
     (musicFile: File | null) => {
-      if (musicOutputGraphRef.current?.mode === 'speakerTest') {
-        stopMusicOutputGraph();
-      }
+      stopMusicOutputGraph();
 
       setSpeakerTestSettings((currentSettings) => ({
         ...currentSettings,
         musicFile,
+        musicQuality: getDefaultMusicQuality('file'),
         musicSource: musicFile ? 'file' : currentSettings.musicSource,
       }));
       setMusicPlayback((currentPlayback) => ({
@@ -128,20 +128,39 @@ export function useSpeakerTestSettingControls({
         durationSeconds: 0,
         isLoading: false,
         isPlaying: false,
+        loadingPhase: null,
+        loadingProgressPercent: null,
         marks: [],
         positionSeconds: 0,
       }));
     },
-    [
-      musicOutputGraphRef,
-      setMusicPlayback,
-      setSpeakerTestSettings,
-      stopMusicOutputGraph,
-    ],
+    [setMusicPlayback, setSpeakerTestSettings, stopMusicOutputGraph],
+  );
+
+  const handleSpeakerMusicQualityChange = useCallback(
+    (musicQuality: SpeakerMusicQuality) => {
+      stopMusicOutputGraph();
+
+      setSpeakerTestSettings((currentSettings) => ({
+        ...currentSettings,
+        musicQuality,
+      }));
+      setMusicPlayback((currentPlayback) => ({
+        ...currentPlayback,
+        durationSeconds: 0,
+        isLoading: false,
+        isPlaying: false,
+        loadingPhase: null,
+        loadingProgressPercent: null,
+        positionSeconds: 0,
+      }));
+    },
+    [setMusicPlayback, setSpeakerTestSettings, stopMusicOutputGraph],
   );
 
   return {
     handleSpeakerMusicFileChange,
+    handleSpeakerMusicQualityChange,
     handleSpeakerMusicSourceChange,
     handleSpeakerTestKindChange,
     handleSpeakerToneFrequencyChange,

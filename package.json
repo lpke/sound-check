@@ -5,8 +5,10 @@
   "scripts": {
     "cert:phone": "node scripts/generate-phone-cert.mjs",
     "cert:phone:serve": "node scripts/serve-phone-cert.mjs",
+    "generate:speaker-music": "node scripts/generate-speaker-music.mjs",
     "dev": "next dev",
     "dev:phone": "next dev -H 0.0.0.0 --experimental-https --experimental-https-cert ./certificates/dev-local.pem --experimental-https-key ./certificates/dev-local-key.pem",
+    "prebuild": "node scripts/generate-speaker-music.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

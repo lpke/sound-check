@@ -293,6 +293,8 @@ export function useSoundCheck() {
     stopRecordedPlaybackOutput:
       recordedPlayback.stopRecordedPlaybackOutputGraph,
     handleSpeakerMusicFileChange: speakerTest.handleSpeakerMusicFileChange,
+    handleSpeakerMusicQualityChange:
+      speakerTest.handleSpeakerMusicQualityChange,
     handleSpeakerMusicSourceChange: speakerTest.handleSpeakerMusicSourceChange,
     handleSpeakerTestKindChange: speakerTest.handleSpeakerTestKindChange,
     handleSpeakerToneFrequencyChange:

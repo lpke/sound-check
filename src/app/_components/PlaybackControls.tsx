@@ -45,6 +45,7 @@ export function AudioPlaybackControls({
   durationSeconds,
   isLoading = false,
   isPlaying,
+  loadingProgressPercent = null,
   markers = [],
   onSeek,
   onToggle,
@@ -60,6 +61,7 @@ export function AudioPlaybackControls({
   durationSeconds: number;
   isLoading?: boolean;
   isPlaying: boolean;
+  loadingProgressPercent?: number | null;
   markers?: {
     id: string;
     label: string;
@@ -93,8 +95,13 @@ export function AudioPlaybackControls({
             (isPlaying ? 'bg-danger text-white' : 'bg-output text-on-control'),
         )}
       >
-        {isLoading ? (
-          <SpinnerIcon aria-hidden="true" className="h-5 w-5 animate-spin" />
+        {isLoading && loadingProgressPercent !== null ? (
+          <ProgressCircle
+            className="h-5 w-5"
+            percent={loadingProgressPercent}
+          />
+        ) : isLoading ? (
+          <SpinnerIcon aria-hidden="true" className="h-6 w-6 animate-spin" />
         ) : isPlaying ? (
           <PauseIcon aria-hidden="true" className="h-5 w-5" />
         ) : (
@@ -169,5 +176,46 @@ export function AudioPlaybackControls({
         </div>
       </div>
     </div>
+  );
+}
+
+function ProgressCircle({
+  className,
+  percent,
+}: {
+  className?: string;
+  percent: number;
+}) {
+  const radius = 8.5;
+  const circumference = 2 * Math.PI * radius;
+  const boundedPercent = clamp(percent, 0, 100);
+  const strokeDashoffset = circumference * (1 - boundedPercent / 100);
+
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 20 20"
+      fill="none"
+      className={className}
+    >
+      <circle
+        cx="10"
+        cy="10"
+        r={radius}
+        className="stroke-white/30"
+        strokeWidth="2.5"
+      />
+      <circle
+        cx="10"
+        cy="10"
+        r={radius}
+        className="stroke-current"
+        strokeDasharray={circumference}
+        strokeDashoffset={strokeDashoffset}
+        strokeLinecap="round"
+        strokeWidth="2.5"
+        transform="rotate(-90 10 10)"
+      />
+    </svg>
   );
 }

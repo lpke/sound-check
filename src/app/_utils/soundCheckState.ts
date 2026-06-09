@@ -15,6 +15,7 @@ export const defaultProcessingSettings: ProcessingSettings = {
 export const defaultSpeakerTestSettings: SpeakerTestSettings = {
   kind: 'tone',
   musicFile: null,
+  musicQuality: 'flac',
   musicSource: 'blindingLights',
   toneFrequency: 440,
 };
@@ -32,6 +33,8 @@ export type MusicPlaybackState = {
   durationSeconds: number;
   isLoading: boolean;
   isPlaying: boolean;
+  loadingPhase: 'decoding' | 'downloading' | null;
+  loadingProgressPercent: number | null;
   marks: MusicMark[];
   positionSeconds: number;
 };
@@ -53,6 +56,8 @@ export function createInitialMusicPlayback(): MusicPlaybackState {
     durationSeconds: 0,
     isLoading: false,
     isPlaying: false,
+    loadingPhase: null,
+    loadingProgressPercent: null,
     marks: [],
     positionSeconds: 0,
   };

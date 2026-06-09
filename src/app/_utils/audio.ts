@@ -187,6 +187,7 @@ export async function createSpeakerTestOutputGraph({
 
 export async function createMusicOutputGraph({
   getArrayBuffer,
+  onDecodeStart,
   onEnded,
   playbackGain = 1,
   routeStreamToOutput,
@@ -195,6 +196,7 @@ export async function createMusicOutputGraph({
   startAtSeconds = 0,
 }: {
   getArrayBuffer: () => Promise<ArrayBuffer>;
+  onDecodeStart?: () => void;
   onEnded: () => void;
   playbackGain?: number;
   routeStreamToOutput: (stream: MediaStream) => Promise<void>;
@@ -205,7 +207,11 @@ export async function createMusicOutputGraph({
   const context = createAudioContext();
 
   try {
-    const audioBuffer = await context.decodeAudioData(await getArrayBuffer());
+    const arrayBuffer = await getArrayBuffer();
+
+    onDecodeStart?.();
+
+    const audioBuffer = await context.decodeAudioData(arrayBuffer);
 
     return await createAudioBufferOutputGraph({
       audioBuffer,

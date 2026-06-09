@@ -3,7 +3,11 @@ import {
   createMusicOutputGraph,
   createSpeakerTestOutputGraph,
 } from '@/utils/audio';
-import { speakerMusicTracks } from '@/utils/speakerMusic';
+import { readResponseArrayBufferWithProgress } from '@/utils/audioLoading';
+import {
+  getSpeakerMusicQualityOption,
+  speakerMusicTracks,
+} from '@/utils/speakerMusic';
 import {
   createInitialMusicPlayback,
   defaultSpeakerTestSettings,
@@ -50,6 +54,8 @@ export function useSpeakerTestPlayback({
   setStatusMessage,
 }: UseSpeakerTestPlaybackOptions) {
   const musicOutputGraphRef = useRef<ActiveOutputGraph | null>(null);
+  const musicLoadAbortControllerRef = useRef<AbortController | null>(null);
+  const musicLoadIdRef = useRef(0);
   const musicProgressTimerRef = useRef<number | null>(null);
   const pendingMusicStartAtRef = useRef<number | null>(null);
   const [speakerTestSettings, setSpeakerTestSettings] = useState(
@@ -102,6 +108,9 @@ export function useSpeakerTestPlayback({
   const stopMusicOutputGraph = useCallback(() => {
     const activeGraph = musicOutputGraphRef.current;
 
+    musicLoadIdRef.current += 1;
+    musicLoadAbortControllerRef.current?.abort();
+    musicLoadAbortControllerRef.current = null;
     stopMusicProgressLoop();
     musicOutputGraphRef.current = null;
     setIsMusicOutputActive(false);
@@ -118,6 +127,8 @@ export function useSpeakerTestPlayback({
       ...currentPlayback,
       isLoading: false,
       isPlaying: false,
+      loadingPhase: null,
+      loadingProgressPercent: null,
       positionSeconds: 0,
     }));
   }, [
@@ -140,9 +151,14 @@ export function useSpeakerTestPlayback({
     setErrorMessage('');
     stopMusicOutputGraph();
 
+    const loadId = musicLoadIdRef.current;
+    const loadAbortController = new AbortController();
+    const isCurrentLoad = () => musicLoadIdRef.current === loadId;
+
     try {
       let playbackStartAtSeconds = musicPlayback.positionSeconds;
       let shouldTrackPlayback = false;
+      let nextOutputGraph: ActiveOutputGraph;
 
       if (speakerTestSettings.kind === 'music') {
         playbackStartAtSeconds =
@@ -160,8 +176,11 @@ export function useSpeakerTestPlayback({
           ...currentPlayback,
           isLoading: true,
           isPlaying: false,
+          loadingPhase: musicSource === 'file' ? 'decoding' : 'downloading',
+          loadingProgressPercent: musicSource === 'file' ? null : 0,
         }));
-        musicOutputGraphRef.current = await createMusicOutputGraph({
+        musicLoadAbortControllerRef.current = loadAbortController;
+        nextOutputGraph = await createMusicOutputGraph({
           getArrayBuffer: async () => {
             if (musicSource === 'file') {
               return (
@@ -173,13 +192,52 @@ export function useSpeakerTestPlayback({
             }
 
             const selectedTrack = speakerMusicTracks[musicSource];
-            const response = await fetch(selectedTrack.path);
+            const selectedQuality = getSpeakerMusicQualityOption(
+              musicSource,
+              speakerTestSettings.musicQuality,
+            );
+
+            if (!selectedQuality) {
+              throw new Error(
+                `${selectedTrack.label} has no available music quality.`,
+              );
+            }
+
+            const response = await fetch(selectedQuality.path, {
+              signal: loadAbortController.signal,
+            });
 
             if (!response.ok) {
               throw new Error(`${selectedTrack.label} could not be loaded.`);
             }
 
-            return response.arrayBuffer();
+            return readResponseArrayBufferWithProgress(
+              response,
+              ({ percent }) => {
+                if (!isCurrentLoad()) {
+                  return;
+                }
+
+                setMusicPlayback((currentPlayback) => ({
+                  ...currentPlayback,
+                  isLoading: true,
+                  loadingPhase: 'downloading',
+                  loadingProgressPercent: percent,
+                }));
+              },
+            );
+          },
+          onDecodeStart: () => {
+            if (!isCurrentLoad()) {
+              return;
+            }
+
+            setMusicPlayback((currentPlayback) => ({
+              ...currentPlayback,
+              isLoading: true,
+              loadingPhase: 'decoding',
+              loadingProgressPercent: null,
+            }));
           },
           onEnded: stopMusicOutputGraph,
           routeStreamToOutput: routePlaybackStreamToOutput,
@@ -198,11 +256,16 @@ export function useSpeakerTestPlayback({
           ...currentPlayback,
           isLoading: true,
           isPlaying: false,
+          loadingPhase: null,
+          loadingProgressPercent: null,
           marks: [],
         }));
-        musicOutputGraphRef.current = await createMusicOutputGraph({
+        musicLoadAbortControllerRef.current = loadAbortController;
+        nextOutputGraph = await createMusicOutputGraph({
           getArrayBuffer: async () => {
-            const response = await fetch(DIAL_UP_AUDIO_PATH);
+            const response = await fetch(DIAL_UP_AUDIO_PATH, {
+              signal: loadAbortController.signal,
+            });
 
             if (!response.ok) {
               throw new Error('Dial-up audio could not be loaded.');
@@ -220,7 +283,7 @@ export function useSpeakerTestPlayback({
         });
         shouldTrackPlayback = true;
       } else {
-        musicOutputGraphRef.current = await createSpeakerTestOutputGraph({
+        nextOutputGraph = await createSpeakerTestOutputGraph({
           kind: speakerTestSettings.kind,
           routeStreamToOutput: routePlaybackStreamToOutput,
           setOutputLevel: (nextLevel) => setOutputSlotLevel('music', nextLevel),
@@ -230,20 +293,28 @@ export function useSpeakerTestPlayback({
         });
       }
 
+      if (!isCurrentLoad()) {
+        nextOutputGraph.cancel();
+        nextOutputGraph.context.close().catch(() => undefined);
+        return;
+      }
+
+      musicLoadAbortControllerRef.current = null;
+      musicOutputGraphRef.current = nextOutputGraph;
       setIsMusicOutputActive(true);
       if (shouldTrackPlayback) {
         setMusicPlayback((currentPlayback) => ({
           ...currentPlayback,
           durationSeconds:
-            musicOutputGraphRef.current?.durationSeconds ??
-            currentPlayback.durationSeconds,
+            nextOutputGraph.durationSeconds ?? currentPlayback.durationSeconds,
           isLoading: false,
           isPlaying: true,
+          loadingPhase: null,
+          loadingProgressPercent: null,
           positionSeconds: clamp(
             playbackStartAtSeconds,
             0,
-            musicOutputGraphRef.current?.durationSeconds ??
-              currentPlayback.durationSeconds,
+            nextOutputGraph.durationSeconds ?? currentPlayback.durationSeconds,
           ),
         }));
         startMusicProgressLoop();
@@ -257,10 +328,16 @@ export function useSpeakerTestPlayback({
             : `Playing test sound on ${selectedOutputName}.`,
       );
     } catch (error) {
+      if (!isCurrentLoad() || isAbortError(error)) {
+        return;
+      }
+
       stopMusicOutputGraph();
       setMusicPlayback((currentPlayback) => ({
         ...currentPlayback,
         isLoading: false,
+        loadingPhase: null,
+        loadingProgressPercent: null,
       }));
       setErrorMessage(toErrorMessage(error));
     }
@@ -309,4 +386,8 @@ export function useSpeakerTestPlayback({
     startSpeakerTest,
     stopMusicOutputGraph,
   };
+}
+
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === 'AbortError';
 }

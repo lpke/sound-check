@@ -161,6 +161,7 @@ export function DebugModal({
                 type: soundCheck.speakerTestSettings.musicFile.type,
               }
             : null,
+          musicQuality: soundCheck.speakerTestSettings.musicQuality,
           musicSource: soundCheck.speakerTestSettings.musicSource,
           toneFrequency: soundCheck.speakerTestSettings.toneFrequency,
         },

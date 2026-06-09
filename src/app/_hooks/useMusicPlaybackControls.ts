@@ -55,6 +55,8 @@ export function useMusicPlaybackControls({
         activeGraph.durationSeconds ?? currentPlayback.durationSeconds,
       isLoading: false,
       isPlaying: false,
+      loadingPhase: null,
+      loadingProgressPercent: null,
       positionSeconds,
     }));
     setStatusMessage(
@@ -89,6 +91,8 @@ export function useMusicPlaybackControls({
         ...currentPlayback,
         isLoading: false,
         isPlaying: true,
+        loadingPhase: null,
+        loadingProgressPercent: null,
       }));
       startMusicProgressLoop();
       setStatusMessage(
@@ -159,6 +163,8 @@ export function useMusicPlaybackControls({
         durationSeconds,
         isLoading: false,
         isPlaying: wasPlaying,
+        loadingPhase: null,
+        loadingProgressPercent: null,
         positionSeconds: nextPosition,
       }));
     },
@@ -218,6 +224,8 @@ export function useMusicPlaybackControls({
           ...currentPlayback,
           isLoading: false,
           isPlaying: true,
+          loadingPhase: null,
+          loadingProgressPercent: null,
           positionSeconds,
         }));
         setStatusMessage(`Playing music on ${selectedOutputName}.`);

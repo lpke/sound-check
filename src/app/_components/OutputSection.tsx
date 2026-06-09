@@ -5,8 +5,15 @@ import {
   type ChangeEvent,
   type RefObject,
 } from 'react';
-import { speakerMusicSources } from '@/utils/speakerMusic';
-import type { SpeakerMusicSource, SpeakerTestKind } from '@/utils/types';
+import {
+  getSpeakerMusicQualityOptions,
+  speakerMusicSources,
+} from '@/utils/speakerMusic';
+import type {
+  SpeakerMusicQuality,
+  SpeakerMusicSource,
+  SpeakerTestKind,
+} from '@/utils/types';
 import { formatSeconds, joinClasses } from '@/utils/utils';
 import type { SoundCheckProps } from './componentTypes';
 import { controlClassName } from './controlStyles';
@@ -81,6 +88,12 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
     if (musicSource === 'file' && !soundCheck.speakerTestSettings.musicFile) {
       window.setTimeout(() => musicFileInputRef.current?.click(), 0);
     }
+  }
+
+  function handleMusicQualityChange(event: ChangeEvent<HTMLSelectElement>) {
+    soundCheck.handleSpeakerMusicQualityChange(
+      event.target.value as SpeakerMusicQuality,
+    );
   }
 
   return (
@@ -189,6 +202,7 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
                 />
                 <MusicConfig
                   musicFileInputRef={musicFileInputRef}
+                  onMusicQualityChange={handleMusicQualityChange}
                   onMusicSourceChange={handleMusicSourceChange}
                   soundCheck={soundCheck}
                 />
@@ -701,15 +715,24 @@ function DialUpConfig({ soundCheck }: SoundCheckProps) {
 
 function MusicConfig({
   musicFileInputRef,
+  onMusicQualityChange,
   onMusicSourceChange,
   soundCheck,
 }: SoundCheckProps & {
   musicFileInputRef: RefObject<HTMLInputElement | null>;
+  onMusicQualityChange: (event: ChangeEvent<HTMLSelectElement>) => void;
   onMusicSourceChange: (event: ChangeEvent<HTMLSelectElement>) => void;
 }) {
   const { isHelpModeActive, isHelpModeExiting } = useHelpMode();
-  const { durationSeconds, isLoading, isPlaying, marks, positionSeconds } =
-    soundCheck.musicPlayback;
+  const {
+    durationSeconds,
+    isLoading,
+    isPlaying,
+    loadingPhase,
+    loadingProgressPercent,
+    marks,
+    positionSeconds,
+  } = soundCheck.musicPlayback;
   const [demoMusicMarks, setDemoMusicMarks] = useState<HelpMusicMark[]>(
     getDefaultHelpDemoMusicMarks,
   );
@@ -743,6 +766,22 @@ function MusicConfig({
     !soundCheck.outputMuted &&
     !needsFile;
   const isHelpModeOpen = isHelpModeActive && !isHelpModeExiting;
+  const musicQualityOptions = getSpeakerMusicQualityOptions(
+    soundCheck.speakerTestSettings.musicSource,
+  );
+  const selectedMusicQuality =
+    musicQualityOptions.find(
+      (qualityOption) =>
+        qualityOption.format === soundCheck.speakerTestSettings.musicQuality,
+    ) ??
+    musicQualityOptions[0] ??
+    null;
+  const loadingButtonLabel =
+    loadingPhase === 'downloading'
+      ? 'Downloading'
+      : loadingPhase === 'decoding'
+        ? 'Decoding'
+        : 'Loading music';
 
   useEffect(() => {
     const updateTimer = window.setTimeout(() => {
@@ -804,6 +843,36 @@ function MusicConfig({
         </Field>
       </HelpTarget>
 
+      {musicQualityOptions.length > 0 ? (
+        <HelpTarget>
+          <Field label="Music quality">
+            <div className="relative">
+              <select
+                id="speaker-music-quality"
+                name="speaker-music-quality"
+                value={selectedMusicQuality?.format ?? ''}
+                onChange={onMusicQualityChange}
+                disabled={musicQualityOptions.length <= 1}
+                className={joinClasses(
+                  controlClassName('output'),
+                  'appearance-none pr-9 disabled:cursor-not-allowed',
+                )}
+              >
+                {musicQualityOptions.map((option) => (
+                  <option key={option.format} value={option.format}>
+                    {option.displayLabel}
+                  </option>
+                ))}
+              </select>
+              <ChevronDownIcon
+                aria-hidden="true"
+                className="text-muted pointer-events-none absolute top-1/2 right-2.5 h-4 w-4 -translate-y-1/2"
+              />
+            </div>
+          </Field>
+        </HelpTarget>
+      ) : null}
+
       {soundCheck.speakerTestSettings.musicSource === 'file' ? (
         <HelpTarget>
           <div className="border-line bg-panel flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
@@ -834,7 +903,7 @@ function MusicConfig({
         <AudioPlaybackControls
           buttonLabel={
             isLoading
-              ? 'Loading music'
+              ? loadingButtonLabel
               : isPlaying
                 ? 'Pause music'
                 : 'Play music'
@@ -882,6 +951,9 @@ function MusicConfig({
           durationSeconds={effectiveDurationSeconds}
           isLoading={isLoading}
           isPlaying={isPlaying}
+          loadingProgressPercent={
+            loadingPhase === 'downloading' ? loadingProgressPercent : null
+          }
           markers={visibleMarks.map((mark) => ({
             id: mark.id,
             label: `Mark at ${formatSeconds(mark.seconds)}`,
