@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { getDefaultDeviceUncertaintyMessage } from '@/utils/deviceWarnings';
 import { MAX_MONITOR_DELAY_MS } from '@/utils/types';
 import { clamp, formatSeconds, joinClasses } from '@/utils/utils';
 import type { SoundCheckProps } from './componentTypes';
@@ -13,6 +14,42 @@ import { Button, LevelMeter } from './UI';
 
 export function InputSection({ soundCheck }: SoundCheckProps) {
   const isInputStopped = soundCheck.appPaused || soundCheck.inputMuted;
+  const selectedInputDevice = soundCheck.inputDevices.find(
+    (device) => device.deviceId === soundCheck.selectedInputId,
+  );
+  const selectedOutputDevice = soundCheck.outputDevices.find(
+    (device) => device.deviceId === soundCheck.selectedOutputId,
+  );
+  const isInputOutputEnabled = !isInputStopped && !soundCheck.outputMuted;
+  const defaultDeviceUncertaintyMessage = getDefaultDeviceUncertaintyMessage(
+    soundCheck.selectedInputId,
+    soundCheck.selectedOutputId,
+  );
+  const shouldWarnSharedDevice =
+    isInputOutputEnabled &&
+    Boolean(selectedInputDevice?.groupId) &&
+    selectedInputDevice?.groupId === selectedOutputDevice?.groupId;
+  const inputQualityWarning = shouldWarnSharedDevice ? (
+    <>
+      Mic and speaker are both on and using the same device.{' '}
+      <strong>
+        Some devices lower mic quality when input and output are active
+        together.
+      </strong>{' '}
+      If quality sounds reduced, choose a different mic or speaker, or mute the
+      speaker.
+    </>
+  ) : isInputOutputEnabled && defaultDeviceUncertaintyMessage ? (
+    <>
+      Mic and speaker are both on. {defaultDeviceUncertaintyMessage}{' '}
+      <strong>
+        Some devices lower mic quality when input and output are active
+        together.
+      </strong>{' '}
+      Select a specific mic or speaker to check.
+    </>
+  ) : null;
+  const inputQualityWarningTone = shouldWarnSharedDevice ? 'warning' : 'muted';
 
   return (
     <SectionShell muted={isInputStopped}>
@@ -34,6 +71,9 @@ export function InputSection({ soundCheck }: SoundCheckProps) {
           signalLevel={soundCheck.inputLevel}
           signalState={soundCheck.inputSignalState}
           toggleLabel={isInputStopped ? 'Unmute microphone' : 'Mute microphone'}
+          warningMessage={inputQualityWarning}
+          warningStorageKey="sound-check-audio-quality-warning-ignored"
+          warningTone={inputQualityWarningTone}
         />
         <LevelMeter
           accent="input"

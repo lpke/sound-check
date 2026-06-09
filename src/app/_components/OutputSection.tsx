@@ -14,6 +14,7 @@ import type {
   SpeakerMusicSource,
   SpeakerTestKind,
 } from '@/utils/types';
+import { getDefaultDeviceUncertaintyMessage } from '@/utils/deviceWarnings';
 import { formatSeconds, joinClasses } from '@/utils/utils';
 import type { SoundCheckProps } from './componentTypes';
 import { controlClassName } from './controlStyles';
@@ -73,6 +74,42 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
   const needsFrequency = usesToneFrequency(testKind);
   const isSpeakerTestActive = soundCheck.routedMode === 'speakerTest';
   const isToneTestPlaying = isSpeakerTestActive;
+  const selectedInputDevice = soundCheck.inputDevices.find(
+    (device) => device.deviceId === soundCheck.selectedInputId,
+  );
+  const selectedOutputDevice = soundCheck.outputDevices.find(
+    (device) => device.deviceId === soundCheck.selectedOutputId,
+  );
+  const isInputOutputEnabled = !isOutputStopped && !soundCheck.inputMuted;
+  const defaultDeviceUncertaintyMessage = getDefaultDeviceUncertaintyMessage(
+    soundCheck.selectedInputId,
+    soundCheck.selectedOutputId,
+  );
+  const shouldWarnSharedDevice =
+    isInputOutputEnabled &&
+    Boolean(selectedInputDevice?.groupId) &&
+    selectedInputDevice?.groupId === selectedOutputDevice?.groupId;
+  const outputQualityWarning = shouldWarnSharedDevice ? (
+    <>
+      Mic and speaker are both on and using the same device.{' '}
+      <strong>
+        Some devices lower playback quality when input and output are active
+        together.
+      </strong>{' '}
+      If quality sounds reduced, choose a different mic or speaker, or mute the
+      mic.
+    </>
+  ) : isInputOutputEnabled && defaultDeviceUncertaintyMessage ? (
+    <>
+      Mic and speaker are both on. {defaultDeviceUncertaintyMessage}{' '}
+      <strong>
+        Some devices lower playback quality when input and output are active
+        together.
+      </strong>{' '}
+      Select a specific mic or speaker to check.
+    </>
+  ) : null;
+  const outputQualityWarningTone = shouldWarnSharedDevice ? 'warning' : 'muted';
 
   function handleSpeakerTestKindChange(event: ChangeEvent<HTMLSelectElement>) {
     const nextKind = event.target.value as SpeakerTestKind;
@@ -116,6 +153,9 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
           signalLevel={soundCheck.outputLevel}
           signalState={soundCheck.outputSignalState}
           toggleLabel={isOutputStopped ? 'Unmute speaker' : 'Mute speaker'}
+          warningMessage={outputQualityWarning}
+          warningStorageKey="sound-check-audio-quality-warning-ignored"
+          warningTone={outputQualityWarningTone}
         />
         <LevelMeter
           accent="output"

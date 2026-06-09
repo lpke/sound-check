@@ -75,6 +75,43 @@ export function RefreshIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function WarningIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" {...props}>
+      <path
+        d="M10 2.5 18 17H2L10 2.5Z"
+        fill="currentColor"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M10 7.4v4.2M10 14.6h.01"
+        stroke="white"
+        strokeLinecap="round"
+        strokeWidth="1.6"
+      />
+    </svg>
+  );
+}
+
+export function WarningQuestionIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" {...props}>
+      <path
+        d="M10 2.5 18 17H2L10 2.5Z"
+        fill="currentColor"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M8.55 8.65a1.55 1.55 0 0 1 1.52-1.05c.96 0 1.66.6 1.66 1.44 0 .64-.32.98-.88 1.37-.58.4-.9.72-.9 1.45v.2M10 14.05h.01"
+        stroke="white"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.35"
+      />
+    </svg>
+  );
+}
+
 export function BookmarkIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 20 20" fill="currentColor" {...props}>

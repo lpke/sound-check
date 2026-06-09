@@ -4,6 +4,7 @@ import type { AudioDevice, SectionSignalState } from '@/utils/types';
 import { clamp, joinClasses } from '@/utils/utils';
 import { useHelpMode } from '@/hooks/useHelpMode';
 import type { IconComponent, SectionAccent } from './componentTypes';
+import { DeviceWarning } from './DeviceWarning';
 import { HelpTarget, HelpTip, type HelpTipPlacement } from './HelpMode';
 import { ChevronDownIcon, RefreshIcon } from './Icons';
 
@@ -51,13 +52,7 @@ export function StickyIoChrome({ children }: { children: ReactNode }) {
           'mobile-safe-area-sticky-top sticky z-[35] sm:static sm:z-auto',
       )}
     >
-      <div
-        className={joinClasses(
-          isHelpModeActive ? 'overflow-visible' : 'overflow-hidden',
-        )}
-      >
-        {children}
-      </div>
+      <div className="overflow-visible">{children}</div>
     </div>
   );
 }
@@ -80,6 +75,9 @@ export function SectionHeader({
   signalLevel,
   signalState,
   toggleLabel,
+  warningMessage,
+  warningStorageKey,
+  warningTone = 'warning',
 }: {
   accent: SectionAccent;
   devices: AudioDevice[];
@@ -98,6 +96,9 @@ export function SectionHeader({
   signalLevel: number;
   signalState: SectionSignalState;
   toggleLabel: string;
+  warningMessage?: ReactNode;
+  warningStorageKey?: string;
+  warningTone?: 'muted' | 'warning';
 }) {
   const canChangeDevice = !disabled && devices.length > 0;
   const headerHelpBubbleClassName =
@@ -150,45 +151,55 @@ export function SectionHeader({
         placement="bottom-start"
         tipClassName="ml-8 [--help-tip-gap:0.25rem]"
       >
-        <label className="relative inline-flex max-w-full min-w-0 items-center justify-self-start py-1 pr-10 text-left">
-          <span className="sr-only">{selectLabel}</span>
-          <span
-            data-help-anchor="true"
-            className="text-foreground min-w-0 truncate text-lg leading-tight font-semibold sm:text-xl"
-            title={visibleDeviceName}
-          >
-            {visibleDeviceName}
-          </span>
-          {canChangeDevice ? (
-            <ChevronDownIcon
-              aria-hidden="true"
-              className="text-muted pointer-events-none mr-2 ml-1.5 h-4 w-4 shrink-0"
+        <div className="inline-flex max-w-full min-w-0 items-center justify-self-start">
+          <label className="relative inline-flex max-w-full min-w-0 items-center py-1 text-left">
+            <span className="sr-only">{selectLabel}</span>
+            <span
+              data-help-anchor="true"
+              className="text-foreground min-w-0 truncate text-lg leading-tight font-semibold sm:text-xl"
+              title={visibleDeviceName}
+            >
+              {visibleDeviceName}
+            </span>
+            {canChangeDevice ? (
+              <ChevronDownIcon
+                aria-hidden="true"
+                className="text-muted pointer-events-none mr-1 ml-1.5 h-4 w-4 shrink-0"
+              />
+            ) : null}
+            <select
+              id={`${deviceKind}-device`}
+              name={`${deviceKind}-device`}
+              aria-label={selectLabel}
+              disabled={!canChangeDevice}
+              title={visibleDeviceName}
+              value={selectedDeviceId}
+              onChange={onDeviceChange}
+              className="absolute inset-0 h-full w-full cursor-pointer appearance-none opacity-0 outline-none disabled:cursor-not-allowed"
+            >
+              {devices.length === 0 ? (
+                <option value="">{emptyLabel}</option>
+              ) : (
+                devices.map((device, index) => (
+                  <option
+                    key={`${device.deviceId}-${index}`}
+                    value={device.deviceId}
+                  >
+                    {getDeviceLabel(device, devices, deviceKind)}
+                  </option>
+                ))
+              )}
+            </select>
+          </label>
+          {warningMessage && warningStorageKey ? (
+            <DeviceWarning
+              accent={accent}
+              message={warningMessage}
+              storageKey={warningStorageKey}
+              tone={warningTone}
             />
           ) : null}
-          <select
-            id={`${deviceKind}-device`}
-            name={`${deviceKind}-device`}
-            aria-label={selectLabel}
-            disabled={!canChangeDevice}
-            title={visibleDeviceName}
-            value={selectedDeviceId}
-            onChange={onDeviceChange}
-            className="absolute inset-0 h-full w-full cursor-pointer appearance-none opacity-0 outline-none disabled:cursor-not-allowed"
-          >
-            {devices.length === 0 ? (
-              <option value="">{emptyLabel}</option>
-            ) : (
-              devices.map((device, index) => (
-                <option
-                  key={`${device.deviceId}-${index}`}
-                  value={device.deviceId}
-                >
-                  {getDeviceLabel(device, devices, deviceKind)}
-                </option>
-              ))
-            )}
-          </select>
-        </label>
+        </div>
       </HeaderHelpTarget>
 
       <HeaderHelpTarget
