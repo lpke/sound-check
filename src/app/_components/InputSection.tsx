@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import {
+  getDefaultDeviceCheckMessage,
   getDefaultDeviceUncertaintyMessage,
   hasSharedDeviceGroup,
 } from '@/utils/deviceWarnings';
@@ -28,6 +29,10 @@ export function InputSection({ soundCheck }: SoundCheckProps) {
     soundCheck.selectedInputId,
     soundCheck.selectedOutputId,
   );
+  const defaultDeviceCheckMessage = getDefaultDeviceCheckMessage(
+    soundCheck.selectedInputId,
+    soundCheck.selectedOutputId,
+  );
   const shouldWarnSharedDevice =
     isInputOutputEnabled &&
     hasSharedDeviceGroup(selectedInputDevice, selectedOutputDevice);
@@ -48,7 +53,7 @@ export function InputSection({ soundCheck }: SoundCheckProps) {
         Some devices lower mic quality when input and output are active
         together.
       </strong>{' '}
-      Select a specific mic or speaker to check.
+      {defaultDeviceCheckMessage}
     </>
   ) : null;
   const inputQualityWarningTone = shouldWarnSharedDevice ? 'warning' : 'muted';

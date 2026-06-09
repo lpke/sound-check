@@ -15,6 +15,7 @@ import type {
   SpeakerTestKind,
 } from '@/utils/types';
 import {
+  getDefaultDeviceCheckMessage,
   getDefaultDeviceUncertaintyMessage,
   hasSharedDeviceGroup,
 } from '@/utils/deviceWarnings';
@@ -88,6 +89,10 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
     soundCheck.selectedInputId,
     soundCheck.selectedOutputId,
   );
+  const defaultDeviceCheckMessage = getDefaultDeviceCheckMessage(
+    soundCheck.selectedInputId,
+    soundCheck.selectedOutputId,
+  );
   const shouldWarnSharedDevice =
     isInputOutputEnabled &&
     hasSharedDeviceGroup(selectedInputDevice, selectedOutputDevice);
@@ -108,7 +113,7 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
         Some devices lower playback quality when input and output are active
         together.
       </strong>{' '}
-      Select a specific mic or speaker to check.
+      {defaultDeviceCheckMessage}
     </>
   ) : null;
   const outputQualityWarningTone = shouldWarnSharedDevice ? 'warning' : 'muted';

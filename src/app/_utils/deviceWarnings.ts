@@ -57,3 +57,25 @@ export function getDefaultDeviceUncertaintyMessage(
 
   return '';
 }
+
+export function getDefaultDeviceCheckMessage(
+  selectedInputId: string,
+  selectedOutputId: string,
+) {
+  const inputIsDefault = selectedInputId === DEFAULT_OUTPUT_ID;
+  const outputIsDefault = selectedOutputId === DEFAULT_OUTPUT_ID;
+
+  if (inputIsDefault && outputIsDefault) {
+    return 'Select a specific mic and speaker to check.';
+  }
+
+  if (inputIsDefault) {
+    return 'Select a specific mic to check.';
+  }
+
+  if (outputIsDefault) {
+    return 'Select a specific speaker to check.';
+  }
+
+  return '';
+}
