@@ -79,15 +79,15 @@ export function WarningIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 20 20" fill="none" {...props}>
       <path
-        d="M10 2.5 18 17H2L10 2.5Z"
+        d="M9.16 3.1c.38-.68 1.3-.68 1.68 0L18 16.13c.43.78-.14 1.72-1.03 1.72H3.03c-.89 0-1.46-.94-1.03-1.72L9.16 3.1Z"
         fill="currentColor"
         strokeLinejoin="round"
       />
       <path
-        d="M10 7.4v4.2M10 14.6h.01"
+        d="M10 6.55v5.25M10 14.8h.01"
         stroke="white"
         strokeLinecap="round"
-        strokeWidth="1.6"
+        strokeWidth="1.85"
       />
     </svg>
   );
@@ -97,16 +97,16 @@ export function WarningQuestionIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 20 20" fill="none" {...props}>
       <path
-        d="M10 2.5 18 17H2L10 2.5Z"
+        d="M9.16 3.1c.38-.68 1.3-.68 1.68 0L18 16.13c.43.78-.14 1.72-1.03 1.72H3.03c-.89 0-1.46-.94-1.03-1.72L9.16 3.1Z"
         fill="currentColor"
         strokeLinejoin="round"
       />
       <path
-        d="M8.55 8.65a1.55 1.55 0 0 1 1.52-1.05c.96 0 1.66.6 1.66 1.44 0 .64-.32.98-.88 1.37-.58.4-.9.72-.9 1.45v.2M10 14.05h.01"
+        d="M8.32 8.42c.25-.75.93-1.23 1.76-1.23 1.08 0 1.9.68 1.9 1.65 0 .74-.38 1.13-1.02 1.58-.66.46-1.02.83-1.02 1.64v.22M10 15h.01"
         stroke="white"
         strokeLinecap="round"
         strokeLinejoin="round"
-        strokeWidth="1.35"
+        strokeWidth="1.55"
       />
     </svg>
   );

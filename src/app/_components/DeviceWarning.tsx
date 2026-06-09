@@ -145,7 +145,7 @@ export function DeviceWarning({
           accent === 'output' && 'hover:bg-output/8',
         )}
       >
-        <Icon aria-hidden="true" className="h-4.5 w-4.5" />
+        <Icon aria-hidden="true" className="h-5 w-5" />
       </button>
       <Popover anchorRect={anchorRect} isOpen={isOpen}>
         <span className="text-foreground block">{message}</span>
