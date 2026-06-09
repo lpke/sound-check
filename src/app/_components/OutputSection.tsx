@@ -14,7 +14,10 @@ import type {
   SpeakerMusicSource,
   SpeakerTestKind,
 } from '@/utils/types';
-import { getDefaultDeviceUncertaintyMessage } from '@/utils/deviceWarnings';
+import {
+  getDefaultDeviceUncertaintyMessage,
+  hasSharedDeviceGroup,
+} from '@/utils/deviceWarnings';
 import { formatSeconds, joinClasses } from '@/utils/utils';
 import type { SoundCheckProps } from './componentTypes';
 import { controlClassName } from './controlStyles';
@@ -87,8 +90,7 @@ export function OutputSection({ soundCheck }: SoundCheckProps) {
   );
   const shouldWarnSharedDevice =
     isInputOutputEnabled &&
-    Boolean(selectedInputDevice?.groupId) &&
-    selectedInputDevice?.groupId === selectedOutputDevice?.groupId;
+    hasSharedDeviceGroup(selectedInputDevice, selectedOutputDevice);
   const outputQualityWarning = shouldWarnSharedDevice ? (
     <>
       Mic and speaker are both on and using the same device.{' '}

@@ -95,18 +95,22 @@ export function useDeviceCatalog({
 
     if (!mediaDevices.selectAudioOutput) {
       setStatusMessage('Output picker is unavailable in this browser.');
-      return;
+      return null;
     }
 
     setErrorMessage('');
 
     try {
       const device = await mediaDevices.selectAudioOutput();
+      const selectedDeviceId = device.deviceId || DEFAULT_OUTPUT_ID;
+
       await refreshDevices();
-      setSelectedOutputId(device.deviceId || DEFAULT_OUTPUT_ID);
+      setSelectedOutputId(selectedDeviceId);
       setStatusMessage('Output access updated.');
+      return selectedDeviceId;
     } catch (error) {
       setErrorMessage(toErrorMessage(error));
+      return null;
     }
   }, [refreshDevices, setErrorMessage, setStatusMessage]);
 

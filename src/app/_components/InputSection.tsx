@@ -1,5 +1,8 @@
 import type { CSSProperties } from 'react';
-import { getDefaultDeviceUncertaintyMessage } from '@/utils/deviceWarnings';
+import {
+  getDefaultDeviceUncertaintyMessage,
+  hasSharedDeviceGroup,
+} from '@/utils/deviceWarnings';
 import { MAX_MONITOR_DELAY_MS } from '@/utils/types';
 import { clamp, formatSeconds, joinClasses } from '@/utils/utils';
 import type { SoundCheckProps } from './componentTypes';
@@ -27,8 +30,7 @@ export function InputSection({ soundCheck }: SoundCheckProps) {
   );
   const shouldWarnSharedDevice =
     isInputOutputEnabled &&
-    Boolean(selectedInputDevice?.groupId) &&
-    selectedInputDevice?.groupId === selectedOutputDevice?.groupId;
+    hasSharedDeviceGroup(selectedInputDevice, selectedOutputDevice);
   const inputQualityWarning = shouldWarnSharedDevice ? (
     <>
       Mic and speaker are both on and using the same device.{' '}

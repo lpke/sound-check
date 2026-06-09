@@ -26,7 +26,14 @@ import { useRecordedPlayback } from '@/hooks/useRecordedPlayback';
 import { useRecordingCapture } from '@/hooks/useRecordingCapture';
 import { useSoundCheckStatus } from '@/hooks/useSoundCheckStatus';
 import { useSpeakerTestPlayback } from '@/hooks/useSpeakerTestPlayback';
+import { hasDeviceQualityWarning } from '@/utils/deviceWarnings';
 import type { NamedRecordedClip } from '@/utils/types';
+
+type PendingOutputRestart =
+  | { mode: 'clip'; clipId: string }
+  | { mode: 'monitor' }
+  | { mode: 'speakerTest' }
+  | null;
 
 export function useSoundCheck() {
   const [statusMessage, setStatusMessage] = useState(
@@ -40,7 +47,11 @@ export function useSoundCheck() {
     setErrorMessage,
     setStatusMessage,
   });
-  const { setSelectedInputId } = devices;
+  const {
+    requestOutputAccess: requestDeviceOutputAccess,
+    setSelectedInputId,
+    setSelectedOutputId,
+  } = devices;
   const input = useInputStream({
     appPaused,
     inputMuted,
@@ -75,6 +86,8 @@ export function useSoundCheck() {
   const [selectedRecordingId, setSelectedRecordingId] = useState<string | null>(
     null,
   );
+  const [pendingOutputRestart, setPendingOutputRestart] =
+    useState<PendingOutputRestart>(null);
   const selectedRecordedClip = useMemo(() => {
     if (!selectedRecordingId) {
       return null;
@@ -155,9 +168,13 @@ export function useSoundCheck() {
   const stopInputStream = input.stopInputStream;
   const stopPlaybackOutputGraph = useCallback(
     ({
+      preserveMusicPosition = false,
       resetRecordedPosition = false,
-    }: { resetRecordedPosition?: boolean } = {}) => {
-      stopMusicOutputGraph();
+    }: {
+      preserveMusicPosition?: boolean;
+      resetRecordedPosition?: boolean;
+    } = {}) => {
+      stopMusicOutputGraph({ preservePosition: preserveMusicPosition });
       stopRecordedPlaybackOutputGraph({
         resetRecordedPosition,
       });
@@ -166,16 +183,73 @@ export function useSoundCheck() {
   );
   const stopOutputGraph = useCallback(
     ({
+      preserveMusicPosition = false,
       resetRecordedPosition = false,
-    }: { resetRecordedPosition?: boolean } = {}) => {
-      stopPlaybackOutputGraph({ resetRecordedPosition });
+    }: {
+      preserveMusicPosition?: boolean;
+      resetRecordedPosition?: boolean;
+    } = {}) => {
+      stopPlaybackOutputGraph({ preserveMusicPosition, resetRecordedPosition });
       stopMonitorOutputGraph();
     },
     [stopMonitorOutputGraph, stopPlaybackOutputGraph],
   );
+  const getShouldResetOutputForDeviceWarning = useCallback(
+    ({
+      selectedInputId = devices.selectedInputId,
+      selectedOutputId = devices.selectedOutputId,
+    }: {
+      selectedInputId?: string;
+      selectedOutputId?: string;
+    } = {}) =>
+      !appPaused &&
+      !inputMuted &&
+      !outputMuted &&
+      hasDeviceQualityWarning({
+        inputDevices: devices.inputDevices,
+        outputDevices: devices.outputDevices,
+        selectedInputId,
+        selectedOutputId,
+      }),
+    [
+      appPaused,
+      devices.inputDevices,
+      devices.outputDevices,
+      devices.selectedInputId,
+      devices.selectedOutputId,
+      inputMuted,
+      outputMuted,
+    ],
+  );
+  const shouldResetOutputForDeviceWarning =
+    getShouldResetOutputForDeviceWarning();
+  const resetOutputForDeviceWarning = useCallback(
+    ({ resumeMonitor = true }: { resumeMonitor?: boolean } = {}) => {
+      const activeClipId = recordedPlayback.recordedPlayback.activeClipId;
+      const nextRestart: PendingOutputRestart = speakerTest.isMusicOutputActive
+        ? { mode: 'speakerTest' }
+        : recordedPlayback.isRecordingPlaybackActive && activeClipId
+          ? { mode: 'clip', clipId: activeClipId }
+          : monitor.monitorEnabled && resumeMonitor
+            ? { mode: 'monitor' }
+            : null;
+
+      setPendingOutputRestart(nextRestart);
+      stopOutputGraph({ preserveMusicPosition: true });
+    },
+    [
+      monitor.monitorEnabled,
+      recordedPlayback.isRecordingPlaybackActive,
+      recordedPlayback.recordedPlayback.activeClipId,
+      speakerTest.isMusicOutputActive,
+      stopOutputGraph,
+    ],
+  );
   const appControls = useAppAudioControls(audioState, {
     monitorEnabled: monitor.monitorEnabled,
+    resetOutputForDeviceWarning,
     setStatusMessage,
+    shouldResetOutputForDeviceWarning,
     stopInputStream,
     stopMonitorOutputGraph,
     stopOutputGraph,
@@ -202,15 +276,107 @@ export function useSoundCheck() {
 
   const handleInputChange = useCallback(
     (event: ChangeEvent<HTMLSelectElement>) => {
-      if (monitor.monitorEnabled) {
+      const nextSelectedInputId = event.target.value;
+
+      if (
+        getShouldResetOutputForDeviceWarning({
+          selectedInputId: nextSelectedInputId,
+        })
+      ) {
+        resetOutputForDeviceWarning();
+      } else if (monitor.monitorEnabled) {
         stopMonitorOutputGraph();
         setStatusMessage('Monitor stopped after input change.');
       }
 
-      setSelectedInputId(event.target.value);
+      setSelectedInputId(nextSelectedInputId);
     },
-    [monitor.monitorEnabled, setSelectedInputId, stopMonitorOutputGraph],
+    [
+      getShouldResetOutputForDeviceWarning,
+      monitor.monitorEnabled,
+      resetOutputForDeviceWarning,
+      setSelectedInputId,
+      setStatusMessage,
+      stopMonitorOutputGraph,
+    ],
   );
+  const handleOutputChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => {
+      const nextSelectedOutputId = event.target.value;
+
+      if (
+        getShouldResetOutputForDeviceWarning({
+          selectedOutputId: nextSelectedOutputId,
+        })
+      ) {
+        resetOutputForDeviceWarning();
+      }
+
+      setSelectedOutputId(nextSelectedOutputId);
+    },
+    [
+      getShouldResetOutputForDeviceWarning,
+      resetOutputForDeviceWarning,
+      setSelectedOutputId,
+    ],
+  );
+  const requestOutputAccess = useCallback(async () => {
+    const nextSelectedOutputId = await requestDeviceOutputAccess();
+
+    if (
+      nextSelectedOutputId &&
+      getShouldResetOutputForDeviceWarning({
+        selectedOutputId: nextSelectedOutputId,
+      })
+    ) {
+      resetOutputForDeviceWarning();
+    }
+  }, [
+    getShouldResetOutputForDeviceWarning,
+    requestDeviceOutputAccess,
+    resetOutputForDeviceWarning,
+  ]);
+
+  const startMonitor = monitor.startMonitor;
+  const playRecordedClip = recordedPlayback.playRecordedClip;
+  const startSpeakerTest = speakerTest.startSpeakerTest;
+
+  useEffect(() => {
+    if (!pendingOutputRestart || appPaused || outputMuted) {
+      return undefined;
+    }
+
+    const restart = pendingOutputRestart;
+    const restartTimer = window.setTimeout(() => {
+      setPendingOutputRestart(null);
+
+      if (restart.mode === 'speakerTest') {
+        void startSpeakerTest();
+        return;
+      }
+
+      if (restart.mode === 'clip') {
+        void playRecordedClip(restart.clipId);
+        return;
+      }
+
+      if (!inputMuted) {
+        void startMonitor();
+      }
+    }, 0);
+
+    return () => {
+      window.clearTimeout(restartTimer);
+    };
+  }, [
+    appPaused,
+    inputMuted,
+    outputMuted,
+    pendingOutputRestart,
+    playRecordedClip,
+    startMonitor,
+    startSpeakerTest,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -286,9 +452,9 @@ export function useSoundCheck() {
     toggleRecordedClipPlayback: recordedPlayback.toggleRecordedClipPlayback,
     requestMicrophoneAccess: input.requestMicrophoneAccess,
     requestPermissionSync: input.requestPermissionSync,
-    requestOutputAccess: devices.requestOutputAccess,
+    requestOutputAccess,
     handleInputChange,
-    handleOutputChange: devices.handleOutputChange,
+    handleOutputChange,
     stopPlaybackOutput: speakerTest.stopMusicOutputGraph,
     stopRecordedPlaybackOutput:
       recordedPlayback.stopRecordedPlaybackOutputGraph,

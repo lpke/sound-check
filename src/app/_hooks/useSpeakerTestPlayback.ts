@@ -105,38 +105,54 @@ export function useSpeakerTestPlayback({
     musicProgressTimerRef.current = window.setInterval(syncMusicPlayback, 120);
   }, [musicPlayback.durationSeconds, stopMusicProgressLoop]);
 
-  const stopMusicOutputGraph = useCallback(() => {
-    const activeGraph = musicOutputGraphRef.current;
+  const stopMusicOutputGraph = useCallback(
+    ({ preservePosition = false }: { preservePosition?: boolean } = {}) => {
+      const activeGraph = musicOutputGraphRef.current;
+      const preservedDurationSeconds = activeGraph?.durationSeconds;
+      const preservedPositionSeconds =
+        preservePosition && activeGraph?.getCurrentTime
+          ? clamp(
+              activeGraph.getCurrentTime(),
+              0,
+              preservedDurationSeconds ?? Number.POSITIVE_INFINITY,
+            )
+          : null;
 
-    musicLoadIdRef.current += 1;
-    musicLoadAbortControllerRef.current?.abort();
-    musicLoadAbortControllerRef.current = null;
-    stopMusicProgressLoop();
-    musicOutputGraphRef.current = null;
-    setIsMusicOutputActive(false);
+      musicLoadIdRef.current += 1;
+      musicLoadAbortControllerRef.current?.abort();
+      musicLoadAbortControllerRef.current = null;
+      stopMusicProgressLoop();
+      musicOutputGraphRef.current = null;
+      setIsMusicOutputActive(false);
 
-    if (activeGraph) {
-      activeGraph.cancel();
-      activeGraph.context.close().catch(() => undefined);
-    }
+      if (activeGraph) {
+        activeGraph.cancel();
+        activeGraph.context.close().catch(() => undefined);
+      }
 
-    resetPlaybackOutput();
-    clearOutputSlotLevel('music');
-    clearOutputSlotSpectrum('music');
-    setMusicPlayback((currentPlayback) => ({
-      ...currentPlayback,
-      isLoading: false,
-      isPlaying: false,
-      loadingPhase: null,
-      loadingProgressPercent: null,
-      positionSeconds: 0,
-    }));
-  }, [
-    clearOutputSlotLevel,
-    clearOutputSlotSpectrum,
-    resetPlaybackOutput,
-    stopMusicProgressLoop,
-  ]);
+      resetPlaybackOutput();
+      clearOutputSlotLevel('music');
+      clearOutputSlotSpectrum('music');
+      setMusicPlayback((currentPlayback) => ({
+        ...currentPlayback,
+        durationSeconds:
+          preservedDurationSeconds ?? currentPlayback.durationSeconds,
+        isLoading: false,
+        isPlaying: false,
+        loadingPhase: null,
+        loadingProgressPercent: null,
+        positionSeconds:
+          preservedPositionSeconds ??
+          (preservePosition ? currentPlayback.positionSeconds : 0),
+      }));
+    },
+    [
+      clearOutputSlotLevel,
+      clearOutputSlotSpectrum,
+      resetPlaybackOutput,
+      stopMusicProgressLoop,
+    ],
+  );
 
   const startSpeakerTest = useCallback(async () => {
     if (appPaused || outputMuted) {

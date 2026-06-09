@@ -7,10 +7,15 @@ import {
 
 type UseAppAudioControlsOptions = {
   monitorEnabled: boolean;
+  resetOutputForDeviceWarning: (options?: { resumeMonitor?: boolean }) => void;
   setStatusMessage: (message: string) => void;
+  shouldResetOutputForDeviceWarning: boolean;
   stopInputStream: () => void;
   stopMonitorOutputGraph: () => void;
-  stopOutputGraph: (options?: { resetRecordedPosition?: boolean }) => void;
+  stopOutputGraph: (options?: {
+    preserveMusicPosition?: boolean;
+    resetRecordedPosition?: boolean;
+  }) => void;
   stopRecording: () => void;
 };
 
@@ -49,7 +54,9 @@ export function useAppAudioControls(
   }: AppAudioState,
   {
     monitorEnabled,
+    resetOutputForDeviceWarning,
     setStatusMessage,
+    shouldResetOutputForDeviceWarning,
     stopInputStream,
     stopMonitorOutputGraph,
     stopOutputGraph,
@@ -67,7 +74,9 @@ export function useAppAudioControls(
     }
 
     stopRecording();
-    if (monitorEnabled) {
+    if (shouldResetOutputForDeviceWarning) {
+      resetOutputForDeviceWarning({ resumeMonitor: false });
+    } else if (monitorEnabled) {
       stopMonitorOutputGraph();
     }
     stopInputStream();
@@ -76,9 +85,11 @@ export function useAppAudioControls(
   }, [
     inputMuted,
     monitorEnabled,
+    resetOutputForDeviceWarning,
     setAppPaused,
     setInputMuted,
     setStatusMessage,
+    shouldResetOutputForDeviceWarning,
     stopInputStream,
     stopMonitorOutputGraph,
     stopRecording,
@@ -92,7 +103,9 @@ export function useAppAudioControls(
       return;
     }
 
-    stopOutputGraph();
+    stopOutputGraph({
+      preserveMusicPosition: shouldResetOutputForDeviceWarning,
+    });
     setOutputMuted(true);
     setStatusMessage('Speaker section muted. Output stopped.');
   }, [
@@ -100,6 +113,7 @@ export function useAppAudioControls(
     setAppPaused,
     setOutputMuted,
     setStatusMessage,
+    shouldResetOutputForDeviceWarning,
     stopOutputGraph,
   ]);
 
