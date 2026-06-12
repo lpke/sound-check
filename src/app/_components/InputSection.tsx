@@ -4,6 +4,10 @@ import {
   getDefaultDeviceUncertaintyMessage,
   hasSharedDeviceGroup,
 } from '@/utils/deviceWarnings';
+import {
+  MAX_AUDIO_BITRATE_KBPS,
+  MIN_AUDIO_BITRATE_KBPS,
+} from '@/utils/audioBitrate';
 import { MAX_MONITOR_DELAY_MS } from '@/utils/types';
 import { clamp, formatSeconds, joinClasses } from '@/utils/utils';
 import type { SoundCheckProps } from './componentTypes';
@@ -322,6 +326,7 @@ function RecordingCapture({
           {qualityNotice}
         </SettingsGroupDescription>
       </div>
+      <RecordingBitrateOptions soundCheck={soundCheck} />
       <div
         className={joinClasses(
           'grid transition-[grid-template-rows] [transition-duration:var(--help-motion-duration)]',
@@ -371,5 +376,58 @@ function RecordingCapture({
         </div>
       </div>
     </SettingsGroup>
+  );
+}
+
+function RecordingBitrateOptions({ soundCheck }: SoundCheckProps) {
+  return (
+    <div className="mb-6 grid gap-3">
+      <label className="flex cursor-pointer items-start gap-3">
+        <input
+          id="recording-custom-bitrate"
+          name="recording-custom-bitrate"
+          type="checkbox"
+          checked={soundCheck.saveRecordingWithCustomBitrate}
+          onChange={(event) =>
+            soundCheck.handleSaveRecordingWithCustomBitrateChange(
+              event.target.checked,
+            )
+          }
+          className={checkboxClassName('input', 'mt-0.5 h-4 w-4 shrink-0')}
+        />
+        <span>
+          <span className="text-foreground block text-sm font-semibold">
+            Save with custom bitrate
+          </span>
+          {soundCheck.saveRecordingWithCustomBitrate ? (
+            <span className="text-muted mt-1 block text-xs leading-5">
+              Encodes each completed recording at the selected bitrate before
+              saving it.
+            </span>
+          ) : null}
+        </span>
+      </label>
+
+      {soundCheck.saveRecordingWithCustomBitrate ? (
+        <div className="grid gap-3">
+          <RangeWithUnit
+            accent="input"
+            ariaLabel="Recording bitrate in kilobits per second"
+            idBase="recording-custom-bitrate-value"
+            label="Bitrate"
+            max={MAX_AUDIO_BITRATE_KBPS}
+            min={MIN_AUDIO_BITRATE_KBPS}
+            step={1}
+            showLabel={false}
+            unit="kbps"
+            value={soundCheck.recordingBitrateKbps}
+            onChange={soundCheck.handleRecordingBitrateChange}
+          />
+          <p className="text-muted text-xs leading-5 whitespace-nowrap">
+            Guide: calls 10-96, Discord avg 64 max 384, Opus 510 max
+          </p>
+        </div>
+      ) : null}
+    </div>
   );
 }

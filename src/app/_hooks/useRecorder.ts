@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getPreferredMimeType } from '@/utils/audio';
+import { getAverageBlobBitrateKbps } from '@/utils/audioBitrate';
 import type { RecordedClip } from '@/utils/types';
 import { toErrorMessage } from '@/utils/utils';
 
@@ -14,7 +15,7 @@ export function useRecorder({
   ensureInputStream: () => Promise<MediaStream>;
   setErrorMessage: (message: string) => void;
   setStatusMessage: (message: string) => void;
-  onClipReady: (clip: RecordedClip) => void;
+  onClipReady: (clip: RecordedClip) => boolean | void;
 }) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingChunksRef = useRef<Blob[]>([]);
@@ -71,6 +72,10 @@ export function useRecorder({
             type: recorder.mimeType || 'audio/webm',
           });
           const url = URL.createObjectURL(blob);
+          const averageBitrateKbps = getAverageBlobBitrateKbps(
+            blob,
+            durationSeconds,
+          );
 
           if (clipUrlRef.current) {
             URL.revokeObjectURL(clipUrlRef.current);
@@ -78,17 +83,22 @@ export function useRecorder({
 
           clipUrlRef.current = url;
           const clip: RecordedClip = {
+            averageBitrateKbps,
+            bitrateModified: false,
             blob,
             durationSeconds,
             mimeType: blob.type || recorder.mimeType || 'audio/webm',
+            originalAverageBitrateKbps: averageBitrateKbps,
+            targetBitrateKbps: null,
             url,
           };
 
           setRecordedClip({
             ...clip,
           });
-          onClipReady(clip);
-          setStatusMessage('Recording ready for playback.');
+          if (onClipReady(clip) !== false) {
+            setStatusMessage('Recording ready for playback.');
+          }
         }
 
         setIsRecording(false);

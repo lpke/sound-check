@@ -152,8 +152,12 @@ export function useSoundCheck() {
   });
 
   const recordedActions = useRecordedClipActions({
+    cancelAllRecordingBitrateEncodes:
+      recordingCapture.cancelAllRecordingBitrateEncodes,
+    cancelRecordingBitrateEncode: recordingCapture.cancelRecordingBitrateEncode,
     recordedClips,
     recordedPlayback: recordedPlayback.recordedPlayback,
+    setErrorMessage,
     setRecordedClips,
     setRecordedPlayback: recordedPlayback.setRecordedPlayback,
     setSelectedRecordingId,
@@ -430,6 +434,11 @@ export function useSoundCheck() {
     outputStatus: status.outputStatus,
     isRecording: recordingCapture.isRecording,
     recordingSeconds: recordingCapture.recordingSeconds,
+    recordingBitrateKbps: recordingCapture.recordingBitrateKbps,
+    saveRecordingWithCustomBitrate:
+      recordingCapture.saveRecordingWithCustomBitrate,
+    encodingRecordedClipProgressById:
+      recordingCapture.encodingRecordedClipProgressById,
     recordedClips,
     recordedClip: recordingCapture.recordedClip,
     recordedPlayback: recordedPlayback.recordedPlayback,
@@ -456,6 +465,8 @@ export function useSoundCheck() {
     renameRecordedClip: recordedActions.renameRecordedClip,
     deleteRecordedClip: recordedActions.deleteRecordedClip,
     deleteAllRecordedClips: recordedActions.deleteAllRecordedClips,
+    duplicateRecordedClipWithBitrate:
+      recordedActions.duplicateRecordedClipWithBitrate,
     selectRecordedClip: recordedActions.selectRecordedClip,
     startRecording: recordingCapture.startRecording,
     stopRecording: recordingCapture.stopRecording,
@@ -481,6 +492,9 @@ export function useSoundCheck() {
     handleProcessingSettingChange:
       processingControls.handleProcessingSettingChange,
     handleDelayChange: monitor.handleDelayChange,
+    handleRecordingBitrateChange: recordingCapture.handleRecordingBitrateChange,
+    handleSaveRecordingWithCustomBitrateChange:
+      recordingCapture.handleSaveRecordingWithCustomBitrateChange,
   };
 
   return {

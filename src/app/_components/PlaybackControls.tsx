@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { PointerEvent, ReactNode } from 'react';
 import { clamp, formatSeconds, joinClasses } from '@/utils/utils';
 import { rangeClassName } from './controlStyles';
 import { PauseIcon, PlayIcon, SpinnerIcon } from './Icons';
@@ -8,6 +8,7 @@ export function PlaybackIconButton({
   disabled,
   label,
   onClick,
+  onPointerDown,
   className,
   tone,
 }: {
@@ -15,8 +16,9 @@ export function PlaybackIconButton({
   disabled?: boolean;
   label: string;
   onClick: () => void;
+  onPointerDown?: (event: PointerEvent<HTMLButtonElement>) => void;
   className?: string;
-  tone: 'danger' | 'output';
+  tone: 'danger' | 'mutedOutput' | 'output';
 }) {
   return (
     <button
@@ -25,10 +27,13 @@ export function PlaybackIconButton({
       title={label}
       disabled={disabled}
       onClick={onClick}
+      onPointerDown={onPointerDown}
       className={joinClasses(
         'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-transparent transition focus:outline-none active:translate-y-px active:scale-95 disabled:opacity-35 disabled:active:translate-y-0 disabled:active:scale-100',
         className,
         tone === 'output' && 'text-output hover:bg-output/8 hover:text-output',
+        tone === 'mutedOutput' &&
+          'text-muted hover:bg-output/8 hover:text-output',
         tone === 'danger' && 'text-muted hover:bg-danger/8 hover:text-danger',
       )}
     >
@@ -42,6 +47,7 @@ export function AudioPlaybackControls({
   canUseTransport,
   centerControls,
   children,
+  durationContent,
   durationSeconds,
   isLoading = false,
   isPlaying,
@@ -58,6 +64,7 @@ export function AudioPlaybackControls({
   canUseTransport: boolean;
   centerControls?: ReactNode;
   children?: ReactNode;
+  durationContent?: ReactNode;
   durationSeconds: number;
   isLoading?: boolean;
   isPlaying: boolean;
@@ -160,12 +167,27 @@ export function AudioPlaybackControls({
                   {formatSeconds(boundedPosition)}
                 </span>
               </div>
-              <span
-                className="font-mono"
-                style={{ fontVariantNumeric: 'tabular-nums' }}
-              >
-                {hasDuration ? formatSeconds(durationSeconds) : '--:--.-'}
-              </span>
+              {durationContent ? (
+                <span className="relative inline-flex h-4 w-16 shrink-0 items-center justify-end">
+                  <span
+                    aria-hidden="true"
+                    className="invisible font-mono"
+                    style={{ fontVariantNumeric: 'tabular-nums' }}
+                  >
+                    --:--.-
+                  </span>
+                  <span className="absolute top-1/2 right-0 z-20 -translate-y-1/2">
+                    {durationContent}
+                  </span>
+                </span>
+              ) : (
+                <span
+                  className="font-mono"
+                  style={{ fontVariantNumeric: 'tabular-nums' }}
+                >
+                  {hasDuration ? formatSeconds(durationSeconds) : '--:--.-'}
+                </span>
+              )}
             </div>
           </div>
           {sideControls ? (

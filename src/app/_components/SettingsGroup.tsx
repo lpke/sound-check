@@ -48,7 +48,9 @@ export function SettingsGroup({
                 </h2>
               ) : null}
               {titleAction ? (
-                <div className="ml-auto shrink-0">{titleAction}</div>
+                <div className="settings-group-title-action ml-auto shrink-0">
+                  {titleAction}
+                </div>
               ) : null}
             </div>
           ) : null}
@@ -95,6 +97,7 @@ export function SettingsGroupDescription({
 }) {
   return (
     <div
+      data-settings-group-description="true"
       className={joinClasses(
         'grid overflow-hidden transition-[grid-template-rows,margin-top] duration-200 ease-out',
         visible ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',

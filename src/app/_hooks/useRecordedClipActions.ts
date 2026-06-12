@@ -1,11 +1,29 @@
-import { type Dispatch, type SetStateAction, useCallback } from 'react';
+import {
+  type Dispatch,
+  type SetStateAction,
+  useCallback,
+  useEffect,
+  useRef,
+} from 'react';
+import {
+  clampAudioBitrateKbps,
+  encodeAudioBlobAtBitrate,
+  isAbortError,
+} from '@/utils/audioBitrate';
 import { revokeRecordedClipUrls } from '@/utils/recordedClipStorage';
-import type { RecordedPlaybackState } from '@/utils/soundCheckState';
+import {
+  createClipId,
+  type RecordedPlaybackState,
+} from '@/utils/soundCheckState';
 import type { NamedRecordedClip } from '@/utils/types';
+import { toErrorMessage } from '@/utils/utils';
 
 type UseRecordedClipActionsOptions = {
+  cancelAllRecordingBitrateEncodes: () => void;
+  cancelRecordingBitrateEncode: (clipId: string) => void;
   recordedClips: NamedRecordedClip[];
   recordedPlayback: RecordedPlaybackState;
+  setErrorMessage: (message: string) => void;
   setRecordedClips: Dispatch<SetStateAction<NamedRecordedClip[]>>;
   setRecordedPlayback: Dispatch<SetStateAction<RecordedPlaybackState>>;
   setSelectedRecordingId: Dispatch<SetStateAction<string | null>>;
@@ -16,14 +34,23 @@ type UseRecordedClipActionsOptions = {
 };
 
 export function useRecordedClipActions({
+  cancelAllRecordingBitrateEncodes,
+  cancelRecordingBitrateEncode,
   recordedClips,
   recordedPlayback,
+  setErrorMessage,
   setRecordedClips,
   setRecordedPlayback,
   setSelectedRecordingId,
   setStatusMessage,
   stopRecordedPlaybackOutputGraph,
 }: UseRecordedClipActionsOptions) {
+  const recordedClipsRef = useRef(recordedClips);
+
+  useEffect(() => {
+    recordedClipsRef.current = recordedClips;
+  }, [recordedClips]);
+
   const renameRecordedClip = useCallback(
     (clipId: string, nextName: string) => {
       setRecordedClips((currentClips) =>
@@ -47,6 +74,7 @@ export function useRecordedClipActions({
         stopRecordedPlaybackOutputGraph({ resetRecordedPosition: true });
       }
 
+      cancelRecordingBitrateEncode(clipId);
       setRecordedClips((currentClips) =>
         currentClips.filter((currentClip) => currentClip.id !== clipId),
       );
@@ -76,6 +104,7 @@ export function useRecordedClipActions({
     [
       recordedClips,
       recordedPlayback.activeClipId,
+      cancelRecordingBitrateEncode,
       setRecordedClips,
       setRecordedPlayback,
       setSelectedRecordingId,
@@ -90,6 +119,7 @@ export function useRecordedClipActions({
     }
 
     stopRecordedPlaybackOutputGraph({ resetRecordedPosition: true });
+    cancelAllRecordingBitrateEncodes();
     setRecordedClips((currentClips) => {
       revokeRecordedClipUrls(currentClips);
 
@@ -104,6 +134,7 @@ export function useRecordedClipActions({
     setStatusMessage('All recordings deleted.');
   }, [
     recordedClips.length,
+    cancelAllRecordingBitrateEncodes,
     setRecordedClips,
     setRecordedPlayback,
     setSelectedRecordingId,
@@ -118,9 +149,120 @@ export function useRecordedClipActions({
     [setSelectedRecordingId],
   );
 
+  const duplicateRecordedClipWithBitrate = useCallback(
+    async ({
+      bitrateKbps,
+      clipId,
+      name,
+      onProgress,
+      signal,
+    }: {
+      bitrateKbps: number;
+      clipId: string;
+      name: string;
+      onProgress?: (progressPercent: number) => void;
+      signal?: AbortSignal;
+    }) => {
+      const sourceClip = recordedClipsRef.current.find(
+        (clip) => clip.id === clipId,
+      );
+
+      if (!sourceClip) {
+        return null;
+      }
+
+      const sourceMaxBitrateKbps = clampAudioBitrateKbps(
+        sourceClip.averageBitrateKbps ?? bitrateKbps,
+      );
+      const targetBitrateKbps = Math.min(
+        clampAudioBitrateKbps(bitrateKbps),
+        sourceMaxBitrateKbps,
+      );
+
+      setErrorMessage('');
+      setStatusMessage(`Encoding duplicate at ${targetBitrateKbps} kbps.`);
+
+      try {
+        const encodedClip = await encodeAudioBlobAtBitrate({
+          bitrateKbps: targetBitrateKbps,
+          blob: sourceClip.blob,
+          durationSeconds: sourceClip.durationSeconds,
+          onProgress,
+          signal,
+        });
+        const duplicateClipId = createClipId();
+        const originalAverageBitrateKbps =
+          sourceClip.originalAverageBitrateKbps ??
+          sourceClip.averageBitrateKbps;
+
+        if (!recordedClipsRef.current.some((clip) => clip.id === clipId)) {
+          revokeRecordedClipUrls([encodedClip]);
+          return null;
+        }
+
+        setRecordedClips((currentClips) => {
+          const sourceClipIndex = currentClips.findIndex(
+            (currentClip) => currentClip.id === clipId,
+          );
+
+          if (sourceClipIndex === -1) {
+            revokeRecordedClipUrls([encodedClip]);
+            return currentClips;
+          }
+
+          const duplicateClip: NamedRecordedClip = {
+            ...sourceClip,
+            averageBitrateKbps: encodedClip.averageBitrateKbps,
+            bitrateModified: true,
+            blob: encodedClip.blob,
+            createdAt: Date.now(),
+            durationSeconds: encodedClip.durationSeconds,
+            id: duplicateClipId,
+            mimeType: encodedClip.mimeType,
+            name,
+            originalAverageBitrateKbps,
+            targetBitrateKbps,
+            url: encodedClip.url,
+          };
+          const nextClips = [...currentClips];
+
+          nextClips.splice(sourceClipIndex + 1, 0, duplicateClip);
+
+          return nextClips;
+        });
+        setRecordedPlayback((currentPlayback) => ({
+          ...currentPlayback,
+          positionsByClipId: {
+            ...currentPlayback.positionsByClipId,
+            [duplicateClipId]: 0,
+          },
+        }));
+        setSelectedRecordingId(duplicateClipId);
+        setStatusMessage(`Duplicate saved at ${targetBitrateKbps} kbps.`);
+
+        return duplicateClipId;
+      } catch (error) {
+        if (isAbortError(error)) {
+          return null;
+        }
+
+        setErrorMessage(`Recording duplicate failed: ${toErrorMessage(error)}`);
+        throw error;
+      }
+    },
+    [
+      setErrorMessage,
+      setRecordedClips,
+      setRecordedPlayback,
+      setSelectedRecordingId,
+      setStatusMessage,
+    ],
+  );
+
   return {
     deleteAllRecordedClips,
     deleteRecordedClip,
+    duplicateRecordedClipWithBitrate,
     renameRecordedClip,
     selectRecordedClip,
   };

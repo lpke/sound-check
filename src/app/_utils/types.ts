@@ -58,9 +58,13 @@ export type ActiveOutputGraph = {
 };
 
 export type RecordedClip = {
+  averageBitrateKbps: number | null;
+  bitrateModified: boolean;
   blob: Blob;
   durationSeconds: number;
   mimeType: string;
+  originalAverageBitrateKbps: number | null;
+  targetBitrateKbps: number | null;
   url: string;
 };
 

@@ -1,9 +1,12 @@
 import type { NamedRecordedClip } from './types';
+import { getAverageBlobBitrateKbps } from './audioBitrate';
 
 const RECORDED_CLIPS_STORAGE_KEY = 'sound-check:recorded-clips:v1';
 const RECORDED_CLIPS_STORAGE_VERSION = 1;
 
 type StoredRecordedClip = {
+  averageBitrateKbps?: number | null;
+  bitrateModified?: boolean;
   createdAt: number;
   dataUrl: string;
   durationSeconds: number;
@@ -12,6 +15,8 @@ type StoredRecordedClip = {
   inputDeviceName: string;
   mimeType: string;
   name: string;
+  originalAverageBitrateKbps?: number | null;
+  targetBitrateKbps?: number | null;
 };
 
 type StoredRecordedClipsPayload = {
@@ -23,9 +28,23 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
+function isOptionalFiniteNumber(value: unknown) {
+  return (
+    value === undefined ||
+    value === null ||
+    (typeof value === 'number' && Number.isFinite(value))
+  );
+}
+
+function isOptionalBoolean(value: unknown) {
+  return value === undefined || typeof value === 'boolean';
+}
+
 function isStoredRecordedClip(value: unknown): value is StoredRecordedClip {
   return (
     isRecord(value) &&
+    isOptionalFiniteNumber(value.averageBitrateKbps) &&
+    isOptionalBoolean(value.bitrateModified) &&
     typeof value.createdAt === 'number' &&
     Number.isFinite(value.createdAt) &&
     typeof value.dataUrl === 'string' &&
@@ -35,7 +54,9 @@ function isStoredRecordedClip(value: unknown): value is StoredRecordedClip {
     typeof value.inputDeviceId === 'string' &&
     typeof value.inputDeviceName === 'string' &&
     typeof value.mimeType === 'string' &&
-    typeof value.name === 'string'
+    typeof value.name === 'string' &&
+    isOptionalFiniteNumber(value.originalAverageBitrateKbps) &&
+    isOptionalFiniteNumber(value.targetBitrateKbps)
   );
 }
 
@@ -90,6 +111,8 @@ async function toStoredRecordedClip(
   clip: NamedRecordedClip,
 ): Promise<StoredRecordedClip> {
   return {
+    averageBitrateKbps: clip.averageBitrateKbps,
+    bitrateModified: clip.bitrateModified,
     createdAt: clip.createdAt,
     dataUrl: await readBlobAsDataUrl(clip.blob),
     durationSeconds: clip.durationSeconds,
@@ -98,6 +121,8 @@ async function toStoredRecordedClip(
     inputDeviceName: clip.inputDeviceName,
     mimeType: clip.mimeType,
     name: clip.name,
+    originalAverageBitrateKbps: clip.originalAverageBitrateKbps,
+    targetBitrateKbps: clip.targetBitrateKbps,
   };
 }
 
@@ -106,8 +131,13 @@ async function toNamedRecordedClip(
 ): Promise<NamedRecordedClip | null> {
   try {
     const blob = await dataUrlToBlob(storedClip.dataUrl, storedClip.mimeType);
+    const averageBitrateKbps =
+      storedClip.averageBitrateKbps ??
+      getAverageBlobBitrateKbps(blob, storedClip.durationSeconds);
 
     return {
+      averageBitrateKbps,
+      bitrateModified: storedClip.bitrateModified === true,
       blob,
       createdAt: storedClip.createdAt,
       durationSeconds: storedClip.durationSeconds,
@@ -116,6 +146,9 @@ async function toNamedRecordedClip(
       inputDeviceName: storedClip.inputDeviceName,
       mimeType: storedClip.mimeType || blob.type || 'audio/webm',
       name: storedClip.name,
+      originalAverageBitrateKbps:
+        storedClip.originalAverageBitrateKbps ?? averageBitrateKbps,
+      targetBitrateKbps: storedClip.targetBitrateKbps ?? null,
       url: URL.createObjectURL(blob),
     };
   } catch {

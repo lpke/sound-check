@@ -2,6 +2,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type KeyboardEvent,
   type MouseEvent,
   type PointerEvent,
 } from 'react';
@@ -102,34 +103,48 @@ function snapValueToStep(
   return clamp(Number(snappedValue.toFixed(decimalPlaces)), min, max);
 }
 
+function formatNumberInputValue(value: number) {
+  return Number.isFinite(value) ? String(value) : '';
+}
+
 export function RangeWithUnit({
   accent,
   ariaLabel,
+  disabled = false,
+  focusOnMount = false,
   idBase,
   label,
   max,
   min,
+  commitOnRangeChange = true,
   step,
+  showHelpLabel = true,
   showLabel = true,
   scaleMode = 'linear',
   showValueInLabel = true,
   unit,
   value,
   onChange,
+  onCommit,
 }: {
   accent: SectionAccent;
   ariaLabel: string;
+  disabled?: boolean;
+  focusOnMount?: boolean;
   idBase: string;
   label: string;
   max: number;
   min: number;
+  commitOnRangeChange?: boolean;
   step: number;
+  showHelpLabel?: boolean;
   showLabel?: boolean;
   scaleMode?: 'linear' | 'log';
   showValueInLabel?: boolean;
   unit: string;
   value: number;
   onChange: (value: number) => void;
+  onCommit?: (value: number) => void;
 }) {
   const scaleMin = 0;
   const scaleMax = 1000;
@@ -146,19 +161,93 @@ export function RangeWithUnit({
       ? 0
       : clamp(((value - min) / (max - min)) * 100, 0, 100);
   const fillColor = accent === 'input' ? '#2f8f4e' : '#2f70d0';
+  const numberInputPaddingClassName = unit.length > 3 ? 'pr-14' : 'pr-10';
   const [isNumberEditing, setIsNumberEditing] = useState(false);
+  const [numberInputValue, setNumberInputValue] = useState(() =>
+    formatNumberInputValue(value),
+  );
   const rangeDragStateRef = useRef<RangeDragState | null>(null);
   const rangeInputRef = useRef<HTMLInputElement | null>(null);
   const numberInputRef = useRef<HTMLInputElement | null>(null);
+  const latestCommittedValueRef = useRef(value);
   const shouldRestoreNumberFocusRef = useRef(false);
   const previousDocumentCursorRef = useRef<string | null>(null);
 
   function commitSliderValue(rawValue: number) {
-    onChange(
-      isLogScale
-        ? antiLogScaleValue(rawValue, min, max, scaleMin, scaleMax, step)
-        : rawValue,
+    const nextValue = isLogScale
+      ? antiLogScaleValue(rawValue, min, max, scaleMin, scaleMax, step)
+      : rawValue;
+
+    if (isNumberEditing) {
+      setNumberInputValue(formatNumberInputValue(nextValue));
+    }
+
+    onChange(nextValue);
+    latestCommittedValueRef.current = nextValue;
+  }
+
+  function getCommittedNumberInputValue(rawValue: string) {
+    if (rawValue.trim() === '') {
+      return value;
+    }
+
+    const parsedValue = Number(rawValue);
+
+    if (!Number.isFinite(parsedValue)) {
+      return value;
+    }
+
+    return snapValueToStep(parsedValue, min, max, step);
+  }
+
+  function commitNumberInputValue(rawValue: string) {
+    const nextValue = getCommittedNumberInputValue(rawValue);
+
+    setNumberInputValue(formatNumberInputValue(nextValue));
+    onChange(nextValue);
+    latestCommittedValueRef.current = nextValue;
+    onCommit?.(nextValue);
+    setIsNumberEditing(false);
+  }
+
+  function handleNumberInputChange(nextValue: string) {
+    setNumberInputValue(nextValue);
+
+    if (nextValue.trim() === '') {
+      return;
+    }
+
+    const parsedValue = Number(nextValue);
+
+    if (
+      !Number.isFinite(parsedValue) ||
+      parsedValue < min ||
+      parsedValue > max
+    ) {
+      return;
+    }
+
+    onChange(snapValueToStep(parsedValue, min, max, step));
+    latestCommittedValueRef.current = snapValueToStep(
+      parsedValue,
+      min,
+      max,
+      step,
     );
+  }
+
+  function handleNumberInputKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      event.currentTarget.blur();
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      setNumberInputValue(formatNumberInputValue(value));
+      event.currentTarget.blur();
+    }
   }
 
   function updateRangeFromPointer(event: PointerEvent<HTMLDivElement>) {
@@ -210,12 +299,33 @@ export function RangeWithUnit({
   }
 
   useEffect(() => {
+    if (!focusOnMount || disabled) {
+      return undefined;
+    }
+
+    const focusTimer = window.setTimeout(() => {
+      numberInputRef.current?.focus({ preventScroll: true });
+      numberInputRef.current?.select();
+    }, 0);
+
+    return () => window.clearTimeout(focusTimer);
+  }, [disabled, focusOnMount]);
+
+  useEffect(() => {
+    latestCommittedValueRef.current = value;
+  }, [value]);
+
+  useEffect(() => {
     return () => {
       stopDocumentResizeCursor();
     };
   }, []);
 
   function handleRangePointerDown(event: PointerEvent<HTMLDivElement>) {
+    if (disabled) {
+      return;
+    }
+
     shouldRestoreNumberFocusRef.current =
       document.activeElement === numberInputRef.current;
 
@@ -245,6 +355,10 @@ export function RangeWithUnit({
   }
 
   function handleRangePointerMove(event: PointerEvent<HTMLDivElement>) {
+    if (disabled) {
+      return;
+    }
+
     const dragState = rangeDragStateRef.current;
 
     if (!dragState || dragState.pointerId !== event.pointerId) {
@@ -290,6 +404,10 @@ export function RangeWithUnit({
   }
 
   function handleRangePointerEnd(event: PointerEvent<HTMLDivElement>) {
+    if (disabled) {
+      return;
+    }
+
     const dragState = rangeDragStateRef.current;
 
     if (!dragState || dragState.pointerId !== event.pointerId) {
@@ -307,12 +425,20 @@ export function RangeWithUnit({
     stopDocumentResizeCursor();
     restoreNumberFocus();
 
+    if (commitOnRangeChange) {
+      onCommit?.(latestCommittedValueRef.current);
+    }
+
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
   }
 
   function handleRangePointerCancel(event: PointerEvent<HTMLDivElement>) {
+    if (disabled) {
+      return;
+    }
+
     const dragState = rangeDragStateRef.current;
 
     if (!dragState || dragState.pointerId !== event.pointerId) {
@@ -329,6 +455,10 @@ export function RangeWithUnit({
   }
 
   function handleRangeClick(event: MouseEvent<HTMLDivElement>) {
+    if (disabled) {
+      return;
+    }
+
     event.preventDefault();
     restoreNumberFocus();
   }
@@ -358,11 +488,20 @@ export function RangeWithUnit({
             min={min}
             max={max}
             step={step}
-            value={value}
-            onChange={(event) => onChange(Number(event.target.value))}
-            onFocus={() => setIsNumberEditing(true)}
-            onBlur={() => setIsNumberEditing(false)}
-            className={joinClasses(numberInputClassName(accent), 'pr-10')}
+            value={isNumberEditing ? numberInputValue : value}
+            disabled={disabled}
+            onChange={(event) => handleNumberInputChange(event.target.value)}
+            onFocus={() => {
+              setNumberInputValue(formatNumberInputValue(value));
+              setIsNumberEditing(true);
+            }}
+            onBlur={(event) => commitNumberInputValue(event.target.value)}
+            onKeyDown={handleNumberInputKeyDown}
+            className={joinClasses(
+              numberInputClassName(accent),
+              numberInputPaddingClassName,
+              disabled && 'disabled:opacity-100',
+            )}
           />
           <span className="text-muted pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm">
             {unit}
@@ -393,6 +532,7 @@ export function RangeWithUnit({
             max={sliderMax}
             step={sliderStep}
             value={sliderValue}
+            disabled={disabled}
             onChange={(event) => {
               commitSliderValue(Number(event.target.value));
             }}
@@ -400,7 +540,10 @@ export function RangeWithUnit({
           />
           <div
             aria-hidden="true"
-            className="absolute inset-x-0 -top-2 -bottom-2 z-20 cursor-ew-resize select-none"
+            className={joinClasses(
+              'absolute inset-x-0 -top-2 -bottom-2 z-20 select-none',
+              disabled ? 'cursor-not-allowed' : 'cursor-ew-resize',
+            )}
           />
         </div>
       </div>
@@ -429,7 +572,7 @@ export function RangeWithUnit({
       ) : (
         rangeField
       )}
-      {rangeLabel}
+      {showHelpLabel ? rangeLabel : null}
     </div>
   );
 }

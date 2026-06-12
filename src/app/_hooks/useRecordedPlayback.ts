@@ -190,10 +190,11 @@ export function useRecordedPlayback({
       try {
         recordedPlaybackOutputGraphRef.current = await createClipOutputGraph({
           blob: clip.blob,
-          onEnded: () =>
+          onEnded: () => {
             stopRecordedPlaybackOutputGraph({
               resetRecordedPosition: true,
-            }),
+            });
+          },
           routeStreamToOutput: routeRecordedPlaybackStreamToOutput,
           setOutputLevel: (nextLevel) =>
             setOutputSlotLevel('recording', nextLevel),
